@@ -28,13 +28,28 @@ jobs:
         with:
           gradle-version: '8.5'
 
+      - name: Setup Permanent Signing Keystore
+        run: |
+          mkdir -p keystore
+          if [ ! -f keystore/sentinel.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore keystore/sentinel.keystore \
+              -alias sentinel \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass cryptosentinel \
+              -keypass cryptosentinel \
+              -dname "CN=CryptoSentinel,OU=Trading,O=Sentinel,C=US"
+          fi
+
       - name: Build APK with Gradle
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
         run: |
           mkdir -p output
-          cp app/build/outputs/apk/debug/app-debug.apk output/CryptoSentinel.apk
+          cp app/build/outputs/apk/release/app-release.apk output/CryptoSentinel.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -46,22 +61,22 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.1' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.1' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.2' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.2' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.1.1
+            ## ⚡ Crypto Sentinel Android v1.1.2 (Signed Universal Release)
             
-            ### 🚀 What's New in v1.1.1:
-            - 🎯 **Radar-Driven Auto-Trading**:
-              - Automatically enters trades on the leading coin selected by the Radar!
-              - **BULLISH RADAR**: When Bids reach ≥ 60% with a heavy Buy Wall ➔ **Auto-Enter LONG** (as seen on UVXY before its +35% rally!).
-              - **BEARISH RADAR**: When Asks reach ≥ 60% with a heavy Sell Wall ➔ **Auto-Enter SHORT** (as seen on BTC 80% Asks $675K dump!).
-            - ⚡ **1-Tap Instant Radar Actions**:
-              - Directly inside the Whale Depth Wall Radar card, tap **`[🟢 LONG COIN]`** or **`[🔴 SHORT COIN]`** for immediate market execution without waiting.
-            - 🛡️ **Critical UI & Splash Screen Freeze Fix**:
-              - Solved the app hang during violent market dumps.
-              - Incoming exchange ticks are buffered and UI rendering is throttled to a smooth 2.5 FPS (400ms buffer).
-              - Alerts are rate-limited to 1 notification per 3s to prevent system audio/notification bottlenecks.
+            ### 🛠️ Critical Installer Fix:
+            - 🔑 **Dual Signature Schemes (v1 JAR + v2 APK Block)**: Solves "App not installed as package appears to be invalid" on Xiaomi MIUI / HyperOS and modern Android devices.
+            - 📦 **Clean Production Package ID**: Stripped `.debug` suffix so the app installs seamlessly as pure `com.cryptosentinel.app`.
+            - 🔒 **Fixed Signing Keystore**: Signed with a consistent release key so future updates install smoothly with 1 tap.
+
+            ### 🚀 Features Included:
+            - 🎯 **Radar-Driven Auto-Trading**: Auto-enters Long on Bids ≥ 60% + Buy Wall, and Short on Asks ≥ 60% + Sell Wall.
+            - ⚡ **1-Tap Instant Radar Actions**: `[🟢 LONG COIN]` and `[🔴 SHORT COIN]` buttons right on the Radar card.
+            - 🛡️ **Smooth UI Throttling**: Eliminates main thread lag during heavy market dumps.
+            - 📈 **Multi-Timeframe Candles (1m, 5m, 15m) + CVD Sub-Chart**.
+            - ⚙️ **Trading Risk & Leverage Settings Panel (1x–20x)**.
 
             ### 📥 Download
             Download `CryptoSentinel.apk` below and tap to install on your phone.
