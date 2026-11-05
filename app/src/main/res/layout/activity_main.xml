@@ -272,8 +272,8 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="4dp"
-        android:text="🔥 TOP BREAKOUT GAINERS (LIVE BYBIT SCANNER)"
-        android:textColor="@color/text_dim"
+        android:text="⚡ FRESH BREAKOUT IGNITIONS (EARLY MOVERS)"
+        android:textColor="@color/primary_cyan"
         android:textSize="11sp"
         android:textStyle="bold" />
 
@@ -310,7 +310,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="4dp"
-        android:text="LIVE LEADING SIGNALS &amp; WALLS"
+        android:text="🎯 ENGINE SIGNAL ALERTS &amp; EXECUTIONS"
         android:textColor="@color/text_dim"
         android:textSize="11sp"
         android:textStyle="bold" />

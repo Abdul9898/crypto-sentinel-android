@@ -233,7 +233,7 @@ class SentinelForegroundService : Service() {
             val result = root.getAsJsonObject("result") ?: return
             val list = result.getAsJsonArray("list") ?: return
 
-            val parsed = mutableListOf<GainerItem>()
+            val parsedAll = mutableListOf<GainerItem>()
             for (item in list) {
                 val obj = item.asJsonObject
                 val sym = obj.get("symbol")?.asString ?: continue
@@ -243,24 +243,37 @@ class SentinelForegroundService : Service() {
                 if (sym.contains("STOCK") || sym in listOf("SOXXUSDT", "SOXSUSDT")) continue
 
                 val turnover = obj.get("turnover24h")?.asString?.toDoubleOrNull() ?: 0.0
-                if (turnover < 250_000.0) continue
+                if (turnover < 300_000.0) continue
 
-                val pct = (obj.get("price24hPcnt")?.asString?.toDoubleOrNull() ?: 0.0) * 100.0
+                val p24h = (obj.get("price24hPcnt")?.asString?.toDoubleOrNull() ?: 0.0) * 100.0
                 val price = obj.get("lastPrice")?.asString?.toDoubleOrNull() ?: 0.0
+                val prev1h = obj.get("prevPrice1h")?.asString?.toDoubleOrNull() ?: price
                 val cleanSym = sym.replace("1000", "").replace("USDT", "")
 
-                parsed.add(GainerItem(cleanSym, price, pct, turnover))
+                // Fresh 1-hour price velocity %
+                val velocity1h = if (prev1h > 0) ((price - prev1h) / prev1h) * 100.0 else 0.0
+
+                parsedAll.add(GainerItem(cleanSym, price, p24h, turnover, velocity1h))
             }
 
-            parsed.sortByDescending { it.change24hPct }
-            val top20 = parsed.take(20)
+            // Fresh Early Ignition Movers:
+            // 24h change is calm (-8% to +15% -> has NOT already pumped +30%, +50%)
+            // and 1h velocity is showing fresh ignition (abs >= 0.8%)
+            val earlyMovers = parsedAll.filter { it.change24hPct in -8.0..15.0 && Math.abs(it.velocity1hPct) >= 0.8 }
+                .sortedByDescending { Math.abs(it.velocity1hPct) }
+
+            val otherMovers = parsedAll.filterNot { it in earlyMovers }
+                .sortedByDescending { it.change24hPct }
+
+            val combined = (earlyMovers + otherMovers).take(20)
 
             synchronized(topGainers) {
                 topGainers.clear()
-                topGainers.addAll(top20)
+                topGainers.addAll(combined)
             }
 
-            for (g in top20.take(3)) {
+            // Auto-subscribe WebSocket to top early ignition coins
+            for (g in combined.take(5)) {
                 val fullSym = if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
                 if (!trackedCoins.containsKey(fullSym)) {
                     trackedCoins[fullSym] = CoinState(symbol = fullSym, price = g.price)
@@ -269,25 +282,28 @@ class SentinelForegroundService : Service() {
                 }
             }
 
+            // New Engine Signal Alert: Fresh Ignition Spark (velocity >= 1.5% from calm base)
             val now = System.currentTimeMillis()
-            for (g in top20) {
-                if (g.change24hPct >= 15.0) {
+            for (g in earlyMovers.take(8)) {
+                if (Math.abs(g.velocity1hPct) >= 1.5) {
                     val lastAlert = alertedGainers[g.symbol] ?: 0L
-                    if (now - lastAlert > 20 * 60 * 1000) {
+                    if (now - lastAlert > 15 * 60 * 1000L) {
                         alertedGainers[g.symbol] = now
                         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
                         val volStr = if (g.turnoverUsd >= 1_000_000) String.format(Locale.US, "$%.1fM", g.turnoverUsd / 1_000_000)
                         else String.format(Locale.US, "$%.0fK", g.turnoverUsd / 1_000)
                         val pStr = if (g.price < 1.0) String.format(Locale.US, "$%.4f", g.price) else String.format(Locale.US, "$%.2f", g.price)
+                        val sideLabel = if (g.velocity1hPct > 0) "🟢 EARLY LONG" else "🔴 EARLY SHORT"
+
                         val alert = AlertItem(
                             timeStr = timeStr,
                             symbol = g.symbol,
-                            type = "BREAKOUT",
+                            type = "EARLY_IGNITION",
                             conviction = "HIGH",
-                            message = "🚀 TOP BREAKOUT: ${g.symbol} +${String.format(Locale.US, "%.1f", g.change24hPct)}% (Vol: $volStr) @ $pStr"
+                            message = "🔥 $sideLabel: ${g.symbol} ${String.format(Locale.US, "%+.1f%%", g.velocity1hPct)} (1h Ignition | 24h: ${String.format(Locale.US, "%+.1f%%", g.change24hPct)}) @ $pStr"
                         )
                         addAlert(alert)
-                        sendAlertNotification("🚀 Breakout: ${g.symbol} +${String.format(Locale.US, "%.1f", g.change24hPct)}%", "Surging on Bybit with $volStr volume @ $pStr")
+                        sendAlertNotification("🔥 Early Ignition: $sideLabel ${g.symbol}", "Surging ${String.format(Locale.US, "%+.1f%%", g.velocity1hPct)} in 1h from quiet base @ $pStr | Vol: $volStr")
                     }
                 }
             }
@@ -298,20 +314,25 @@ class SentinelForegroundService : Service() {
 
     private fun fetchDepthRadar() {
         val candidateSyms = mutableListOf<String>()
+
+        // 1. Prioritize Top Early Ignition Movers (fresh coins just beginning to move)
+        synchronized(topGainers) {
+            for (g in topGainers.take(5)) {
+                val s = if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
+                candidateSyms.add(s)
+            }
+        }
+
+        // 2. Also include any currently open positions to monitor active walls
         val openPosSyms = synchronized(paperStats.openPositions) {
             paperStats.openPositions.map { it.symbol }
         }
-
-        if (openPosSyms.isNotEmpty()) {
-            candidateSyms.addAll(openPosSyms)
-        } else {
-            synchronized(topGainers) {
-                for (g in topGainers.take(3)) {
-                    val s = if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
-                    candidateSyms.add(s)
-                }
+        for (sym in openPosSyms) {
+            if (!candidateSyms.contains(sym)) {
+                candidateSyms.add(sym)
             }
         }
+
         if (candidateSyms.isEmpty()) candidateSyms.add("BTCUSDT")
 
         var bestResult: DepthRadarState? = null
@@ -588,22 +609,6 @@ class SentinelForegroundService : Service() {
                     if (usdVal >= tierConfig.minWhaleOrder) {
                         recentWhaleTrades.add(WhaleRecord(now, sym, isBuy, usdVal, p))
                         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
-                        val sideIcon = if (isBuy) "🟢 BUY" else "🔴 SELL"
-                        val cleanSym = sym.replace("1000", "").replace("USDT", "")
-                        val pStr = if (p < 1.0) String.format(Locale.US, "$%.4f", p) else String.format(Locale.US, "$%.2f", p)
-                        val msg = "$sideIcon Whale: $${String.format(Locale.US, "%,.0f", usdVal)} @ $pStr"
-                        val alert = AlertItem(
-                            timeStr = timeStr,
-                            symbol = cleanSym,
-                            type = "WHALE_TRADE",
-                            conviction = if (usdVal >= tierConfig.clusterThreshold) "HIGH" else "MEDIUM",
-                            message = msg
-                        )
-                        addAlert(alert)
-                        if (usdVal >= tierConfig.clusterThreshold) {
-                            sendAlertNotification("🐋 Whale Order ($cleanSym)", msg)
-                        }
-
                         evaluateWhaleCluster(sym, p, now, timeStr, tierConfig)
                     }
                 }

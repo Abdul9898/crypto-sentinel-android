@@ -95,13 +95,23 @@ class GainerAdapter(private val gainers: List<GainerItem>) : RecyclerView.Adapte
         else if (gainer.price >= 1) String.format("$%,.2f", gainer.price)
         else String.format("$%,.4f", gainer.price)
 
-        val sign = if (gainer.change24hPct >= 0) "+" else ""
-        holder.tvChange.text = String.format("%s%.1f%%", sign, gainer.change24hPct)
-        holder.tvChange.setTextColor(if (gainer.change24hPct >= 0) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
+        val vel = gainer.velocity1hPct
+        if (vel != 0.0) {
+            val sign = if (vel >= 0) "+" else ""
+            holder.tvChange.text = String.format(java.util.Locale.US, "%s%.1f%% 1h", sign, vel)
+            holder.tvChange.setTextColor(if (vel >= 0) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
 
-        val volFormatted = if (gainer.turnoverUsd >= 1_000_000) String.format("Vol: $%.1fM", gainer.turnoverUsd / 1_000_000)
-        else String.format("Vol: $%.0fK", gainer.turnoverUsd / 1_000)
-        holder.tvVol.text = volFormatted
+            val sign24 = if (gainer.change24hPct >= 0) "+" else ""
+            holder.tvVol.text = String.format(java.util.Locale.US, "24h %s%.0f%%", sign24, gainer.change24hPct)
+        } else {
+            val sign = if (gainer.change24hPct >= 0) "+" else ""
+            holder.tvChange.text = String.format("%s%.1f%%", sign, gainer.change24hPct)
+            holder.tvChange.setTextColor(if (gainer.change24hPct >= 0) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
+
+            val volFormatted = if (gainer.turnoverUsd >= 1_000_000) String.format("Vol: $%.1fM", gainer.turnoverUsd / 1_000_000)
+            else String.format("Vol: $%.0fK", gainer.turnoverUsd / 1_000)
+            holder.tvVol.text = volFormatted
+        }
     }
 
     override fun getItemCount(): Int = gainers.size

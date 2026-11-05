@@ -61,23 +61,22 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.3' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.3' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.4' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.4' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.1.3 (Individual Position Cards & Quick Exit)
+            ## ⚡ Crypto Sentinel Android v1.1.4 (Early Breakout Ignition Engine & Clean Signals)
             
-            ### 🎴 What's New in v1.1.3:
-            - 🃏 **Individual Active Position Cards**: Every open trade (BTC, ETH, Altcoins) now gets its own dedicated card on the dashboard instead of being merged into a single text block.
-            - 📈 **Independent Chart for Every Coin**: Tapping "📈 Chart" or tapping any coin's card opens the live 1m/5m/15m Candlestick Chart, CVD Order Flow, and TP/SL levels for that exact coin.
-            - ❌ **1-Tap Quick Close Action**: Each position has its own "❌ Close" button on the card with confirmation to exit that specific coin at market price.
-            - 🎯 **Multi-Position Depth Radar**: The Whale Depth Wall Radar now monitors and tracks order book imbalances across all open positions.
+            ### 🚀 What's New in v1.1.4:
+            - ⚡ **Early Breakout Ignition Engine**: Detects newly awakening moves by measuring 1-hour price velocity against a calm 24h baseline (-8% to +15%). Completely eliminates chasing exhausted +50% pumps!
+            - 🎯 **Ignition-Focused Depth Radar**: The Whale Depth Wall Radar automatically prioritizes the freshest early movers, scanning their Level 2 order books for whale support walls ($\ge 60\%$ Bids).
+            - 🔕 **Clean Engine Signals (No Whale Spam)**: Removed raw whale order notification spam. The feed and phone alerts now exclusively deliver high-conviction **Early Ignition Signals** (`🔥 EARLY LONG / SHORT`), **Radar Signals**, and **Auto-Trades**.
+            - 📊 **1h Velocity Badges**: Early mover cards now prominently show `+X.X% 1h` ignition momentum and 24h baseline.
 
             ### 🛠️ Stable Signing:
-            - 🔑 **Dual Signature Schemes (v1 JAR + v2 APK Block)**: Installs directly on Xiaomi MIUI / HyperOS and all Android devices without "invalid package" errors.
-            - 🔒 Signed with the permanent `sentinel.keystore`.
+            - 🔑 **Dual Signature Schemes (v1 JAR + v2 APK Block)**: Permanent dual-signed release with `sentinel.keystore`. Installs seamlessly over previous versions with 1 tap.
 
             ### 📥 Download
-            Download `CryptoSentinel.apk` below and tap to install/update on your phone.
+            Download `CryptoSentinel.apk` below and tap to update on your phone.
           files: output/CryptoSentinel.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

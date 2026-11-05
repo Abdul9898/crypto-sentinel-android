@@ -23,7 +23,8 @@ data class GainerItem(
     val symbol: String,
     val price: Double,
     val change24hPct: Double,
-    val turnoverUsd: Double
+    val turnoverUsd: Double,
+    val velocity1hPct: Double = 0.0
 )
 
 data class CoinTierConfig(
