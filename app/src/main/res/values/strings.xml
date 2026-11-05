@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Crypto Sentinel</string>
+    <string name="service_running_title">Crypto Sentinel Active</string>
+    <string name="service_running_desc">Monitoring live Bybit CVD, Open Interest &amp; Leading Squeezes</string>
+    <string name="channel_id">sentinel_alerts_channel</string>
+    <string name="channel_name">Crypto Sentinel High Conviction Alerts</string>
+</resources>
