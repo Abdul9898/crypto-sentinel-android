@@ -386,15 +386,13 @@ class SentinelForegroundService : Service() {
                     )
 
                     val imbalanceScore = Math.abs(ratio - 50.0)
-                    if (openPosSym != null || imbalanceScore > bestImbalanceScore) {
+                    if (bestResult == null || imbalanceScore > bestImbalanceScore) {
                         bestImbalanceScore = imbalanceScore
                         bestResult = radarState
                     }
 
                     // Evaluate Radar Signal Auto-Trade (Ratio >= 60% or <= 40%)
                     evaluateRadarAutoTrade(fullSym, cleanSym, ratio, topBidUsd, topBidP, topAskUsd, topAskP)
-
-                    if (openPosSym != null) return@use
                 }
             } catch (_: Exception) {}
         }
