@@ -147,3 +147,75 @@ class TradeStoryAdapter(
 
     override fun getItemCount(): Int = stories.size
 }
+
+data class ActivePositionItem(
+    val position: PaperPosition,
+    val currentPrice: Double,
+    val pnlEst: Double,
+    val pnlPct: Double
+)
+
+class ActivePositionAdapter(
+    private val items: List<ActivePositionItem>,
+    private val onChartClick: (PaperPosition) -> Unit,
+    private val onCloseClick: (PaperPosition) -> Unit
+) : RecyclerView.Adapter<ActivePositionAdapter.PositionViewHolder>() {
+
+    class PositionViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val tvSideBadge: TextView = view.findViewById(R.id.tvPosSideBadge)
+        val tvSymbol: TextView = view.findViewById(R.id.tvPosSymbol)
+        val tvPnl: TextView = view.findViewById(R.id.tvPosPnl)
+        val tvPrices: TextView = view.findViewById(R.id.tvPosPrices)
+        val tvStatusNote: TextView = view.findViewById(R.id.tvPosStatusNote)
+        val tvTpSl: TextView = view.findViewById(R.id.tvPosTpSl)
+        val btnClose: TextView = view.findViewById(R.id.btnPosClose)
+        val btnChart: TextView = view.findViewById(R.id.btnPosChart)
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PositionViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_active_position, parent, false)
+        return PositionViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: PositionViewHolder, position: Int) {
+        val item = items[position]
+        val pos = item.position
+        val isLong = pos.side == "LONG"
+        val sideEmoji = if (isLong) "🟢" else "🔴"
+
+        holder.tvSideBadge.text = "$sideEmoji ${pos.side} ${pos.leverage}x"
+        holder.tvSideBadge.setTextColor(if (isLong) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
+
+        holder.tvSymbol.text = pos.symbol
+
+        val pnlSign = if (item.pnlEst >= 0) "+" else ""
+        holder.tvPnl.text = String.format(java.util.Locale.US, "%s$%,.2f (%+.2f%%)", pnlSign, item.pnlEst, item.pnlPct)
+        val isProfit = item.pnlEst >= 0
+        holder.tvPnl.setTextColor(if (isProfit) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
+
+        val pFmt = if (pos.entryPrice < 1.0) "$%,.4f" else "$%,.2f"
+        val curPFmt = if (item.currentPrice < 1.0) "$%,.4f" else "$%,.2f"
+        val entryStr = String.format(java.util.Locale.US, pFmt, pos.entryPrice)
+        val curStr = String.format(java.util.Locale.US, curPFmt, item.currentPrice)
+        holder.tvPrices.text = "Entry: $entryStr -> Mark: $curStr"
+
+        holder.tvStatusNote.text = "[${pos.statusNote}]"
+
+        val tpStr = String.format(java.util.Locale.US, pFmt, pos.tpPrice)
+        val slStr = String.format(java.util.Locale.US, pFmt, pos.slPrice)
+        holder.tvTpSl.text = "🎯 TP: $tpStr | 🛑 SL: $slStr"
+
+        holder.itemView.setOnClickListener {
+            onChartClick(pos)
+        }
+        holder.btnChart.setOnClickListener {
+            onChartClick(pos)
+        }
+        holder.btnClose.setOnClickListener {
+            onCloseClick(pos)
+        }
+    }
+
+    override fun getItemCount(): Int = items.size
+}
+

@@ -81,18 +81,26 @@
                 android:textColor="@color/text_dim"
                 android:textSize="12sp" />
 
+            <!-- Empty state when no positions are open -->
             <TextView
-                android:id="@+id/tvActivePositions"
+                android:id="@+id/tvPositionsEmpty"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="5dp"
                 android:background="#151A22"
-                android:clickable="true"
-                android:focusable="true"
-                android:padding="6dp"
-                android:text="Waiting for whale clusters (&gt; $35k) to auto-trade..."
+                android:padding="8dp"
+                android:text="⚡ Adaptive 3-Tier Auto-Trading Active (Waiting for Whale Flow)..."
                 android:textColor="@color/primary_cyan"
                 android:textSize="11sp" />
+
+            <!-- Active Positions List (One clickable card per coin) -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvActivePositions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:nestedScrollingEnabled="false"
+                android:visibility="gone" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 

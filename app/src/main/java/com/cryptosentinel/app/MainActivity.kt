@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.cryptosentinel.app.databinding.ActivityMainBinding
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.switchmaterial.SwitchMaterial
 import java.util.Locale
 
@@ -38,11 +39,13 @@ class MainActivity : AppCompatActivity() {
     private val alertsList = mutableListOf<AlertItem>()
     private val gainersList = mutableListOf<GainerItem>()
     private val storiesList = mutableListOf<TradeStory>()
+    private val activePositionsList = mutableListOf<ActivePositionItem>()
 
     private lateinit var coinAdapter: CoinAdapter
     private lateinit var alertAdapter: AlertAdapter
     private lateinit var gainerAdapter: GainerAdapter
     private lateinit var storyAdapter: TradeStoryAdapter
+    private lateinit var activePositionAdapter: ActivePositionAdapter
 
     // Smooth UI debouncer to prevent main thread choke
     private var lastUiRender = 0L
@@ -107,25 +110,41 @@ class MainActivity : AppCompatActivity() {
         binding.rvStories.layoutManager = LinearLayoutManager(this)
         binding.rvStories.adapter = storyAdapter
 
-        // Setup Active Position Click -> Opens Live Chart with Close Button
-        binding.tvActivePositions.setOnClickListener {
-            val s = sentinelService ?: return@setOnClickListener
-            val pos = synchronized(s.paperStats.openPositions) { s.paperStats.openPositions.firstOrNull() } ?: return@setOnClickListener
-            ChartDialogHelper.showChart(
-                context = this,
-                symbol = pos.symbol,
-                side = pos.side,
-                entryPrice = pos.entryPrice,
-                tpPrice = pos.tpPrice,
-                slPrice = pos.slPrice,
-                tpPct = pos.tpPct,
-                slPct = pos.slPct,
-                positionId = pos.id,
-                statusNote = "${pos.side} (${pos.statusNote})",
-                onClosePosition = { id -> s.closePositionManually(id) },
-                candlesProvider = { interval, cb -> s.fetchKlines(pos.symbol, interval, cb) }
-            )
-        }
+        // Setup Active Positions List (Each position has its own card with Chart & Close buttons)
+        activePositionAdapter = ActivePositionAdapter(
+            items = activePositionsList,
+            onChartClick = { pos ->
+                val s = sentinelService ?: return@ActivePositionAdapter
+                ChartDialogHelper.showChart(
+                    context = this,
+                    symbol = pos.symbol,
+                    side = pos.side,
+                    entryPrice = pos.entryPrice,
+                    tpPrice = pos.tpPrice,
+                    slPrice = pos.slPrice,
+                    tpPct = pos.tpPct,
+                    slPct = pos.slPct,
+                    positionId = pos.id,
+                    statusNote = "${pos.side} (${pos.statusNote})",
+                    onClosePosition = { id -> s.closePositionManually(id) },
+                    candlesProvider = { interval, cb -> s.fetchKlines(pos.symbol, interval, cb) }
+                )
+            },
+            onCloseClick = { pos ->
+                val s = sentinelService ?: return@ActivePositionAdapter
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("Close Position")
+                    .setMessage("Manually exit ${pos.side} ${pos.symbol} at current market price?")
+                    .setPositiveButton("Close Now") { _, _ ->
+                        s.closePositionManually(pos.id)
+                        Toast.makeText(this, "Closing ${pos.side} ${pos.symbol}...", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        )
+        binding.rvActivePositions.layoutManager = LinearLayoutManager(this)
+        binding.rvActivePositions.adapter = activePositionAdapter
 
         // Setup Coins List
         coinAdapter = CoinAdapter(coinsList)
@@ -334,32 +353,37 @@ class MainActivity : AppCompatActivity() {
             binding.tvBidWall.text = "🟢 Wall: $bidWallStr @ " + String.format(Locale.US, pFormat, radar.topBidWallPrice)
             binding.tvAskWall.text = "🔴 Wall: $askWallStr @ " + String.format(Locale.US, pAskFormat, radar.topAskWallPrice)
 
-            // 7. Active Positions Display with Trailing/Break-Even note
-            if (stats.openPositions.isNotEmpty()) {
-                val openStr = stats.openPositions.joinToString("\n\n") { pos ->
-                    val sym = pos.symbol.replace("1000", "").replace("USDT", "")
+            // 7. Active Positions Display (Individual Cards)
+            val currentPositions = synchronized(stats.openPositions) { stats.openPositions.toList() }
+            if (currentPositions.isNotEmpty()) {
+                binding.tvPositionsEmpty.visibility = View.GONE
+                binding.rvActivePositions.visibility = View.VISIBLE
+
+                val updatedList = currentPositions.map { pos ->
                     val curPrice = s.trackedCoins[pos.symbol]?.price ?: pos.entryPrice
                     val rawDiffPct = if (pos.side == "LONG") ((curPrice - pos.entryPrice) / pos.entryPrice) * 100.0
                                      else ((pos.entryPrice - curPrice) / pos.entryPrice) * 100.0
                     val pnlEst = (rawDiffPct / 100.0) * pos.sizeUsd * pos.leverage
-                    val sideIcon = if (pos.side == "LONG") "🟢" else "🔴"
-                    val pFmt = if (pos.entryPrice < 1.0) "$%,.4f" else "$%,.2f"
-                    val curPFmt = if (curPrice < 1.0) "$%,.4f" else "$%,.2f"
-
-                    val entryStr = String.format(Locale.US, pFmt, pos.entryPrice)
-                    val curStr = String.format(Locale.US, curPFmt, curPrice)
-                    val pnlSignStr = if (pnlEst >= 0) "+" else ""
-                    val pnlEstStr = String.format(Locale.US, "%s$%,.2f", pnlSignStr, pnlEst)
-                    val diffStr = String.format(Locale.US, "%+.2f%%", rawDiffPct * pos.leverage)
-
-                    val tpStr = String.format(Locale.US, pFmt, pos.tpPrice)
-                    val slStr = String.format(Locale.US, pFmt, pos.slPrice)
-
-                    "$sideIcon [${pos.side} $sym ${pos.leverage}x] Entry: $entryStr -> Now: $curStr ($diffStr / $pnlEstStr)\n🎯 TP: $tpStr | 🛑 SL: $slStr [${pos.statusNote}]\n👉 Tap to View Candlestick Chart (1m/5m/15m) & Manual Exit"
+                    val pnlPct = rawDiffPct * pos.leverage
+                    ActivePositionItem(
+                        position = pos,
+                        currentPrice = curPrice,
+                        pnlEst = pnlEst,
+                        pnlPct = pnlPct
+                    )
                 }
-                binding.tvActivePositions.text = openStr
+
+                activePositionsList.clear()
+                activePositionsList.addAll(updatedList)
+                activePositionAdapter.notifyDataSetChanged()
             } else {
-                binding.tvActivePositions.text = "⚡ Adaptive 3-Tier Auto-Trading Active (${s.settings.leverage}x Leverage | Waiting for Whale Flow)..."
+                binding.rvActivePositions.visibility = View.GONE
+                binding.tvPositionsEmpty.visibility = View.VISIBLE
+                binding.tvPositionsEmpty.text = "⚡ Adaptive 3-Tier Auto-Trading Active (${s.settings.leverage}x Leverage | Waiting for Whale Flow)..."
+                if (activePositionsList.isNotEmpty()) {
+                    activePositionsList.clear()
+                    activePositionAdapter.notifyDataSetChanged()
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()

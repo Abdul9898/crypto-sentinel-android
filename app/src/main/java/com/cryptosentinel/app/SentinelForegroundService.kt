@@ -298,12 +298,12 @@ class SentinelForegroundService : Service() {
 
     private fun fetchDepthRadar() {
         val candidateSyms = mutableListOf<String>()
-        val openPosSym = synchronized(paperStats.openPositions) {
-            paperStats.openPositions.firstOrNull()?.symbol
+        val openPosSyms = synchronized(paperStats.openPositions) {
+            paperStats.openPositions.map { it.symbol }
         }
 
-        if (openPosSym != null) {
-            candidateSyms.add(openPosSym)
+        if (openPosSyms.isNotEmpty()) {
+            candidateSyms.addAll(openPosSyms)
         } else {
             synchronized(topGainers) {
                 for (g in topGainers.take(3)) {

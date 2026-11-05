@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="6dp"
+    app:cardBackgroundColor="#111620"
+    app:cardCornerRadius="8dp"
+    app:strokeColor="@color/card_border"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="9dp">
+
+        <!-- Line 1: Side Badge + Symbol + Live PnL -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvPosSideBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@color/card_border"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp"
+                android:text="🟢 LONG 10x"
+                android:textColor="@color/neon_green"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvPosSymbol"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="ETHUSDT"
+                android:textColor="@color/text_white"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvPosPnl"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="+$14.20 (+1.4%)"
+                android:textColor="@color/neon_green"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Line 2: Prices (Entry -> Mark) + Trailing/BE Status Note -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvPosPrices"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Entry: $2,120.50 -> Mark: $2,145.00"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/tvPosStatusNote"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="[Trailing +1.0%]"
+                android:textColor="@color/gold_accent"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Line 3: TP/SL levels & Action Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvPosTpSl"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🎯 TP: $2,180.00 | 🛑 SL: $2,100.00"
+                android:textColor="@color/text_dim"
+                android:textSize="10sp" />
+
+            <!-- Direct Close Button -->
+            <TextView
+                android:id="@+id/btnPosClose"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#2E1822"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:text="❌ Close"
+                android:textColor="@color/neon_red"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <!-- Chart Button -->
+            <TextView
+                android:id="@+id/btnPosChart"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="#152636"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:text="📈 Chart"
+                android:textColor="@color/primary_cyan"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>
