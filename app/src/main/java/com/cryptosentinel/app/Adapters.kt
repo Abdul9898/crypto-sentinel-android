@@ -27,20 +27,20 @@ class CoinAdapter(private val coins: List<CoinState>) : RecyclerView.Adapter<Coi
         val cleanSym = coin.symbol.replace("1000", "").replace("USDT", "")
 
         holder.tvSymbol.text = cleanSym
-        holder.tvPrice.text = if (coin.price >= 1000) String.format("$%,.1f", coin.price)
-        else if (coin.price >= 1) String.format("$%,.2f", coin.price)
-        else if (coin.price > 0) String.format("$%,.4f", coin.price)
+        holder.tvPrice.text = if (coin.price >= 1000) String.format(java.util.Locale.US, "$%,.1f", coin.price)
+        else if (coin.price >= 1) String.format(java.util.Locale.US, "$%,.2f", coin.price)
+        else if (coin.price > 0) String.format(java.util.Locale.US, "$%,.4f", coin.price)
         else "Sync..."
 
         // CVD formatting
         val cvd = coin.cvd5m
         val sign = if (cvd > 0) "+" else ""
-        holder.tvCvd.text = if (Math.abs(cvd) >= 1_000_000) String.format("%s$%.1fM", sign, cvd / 1_000_000)
-        else String.format("%s$%.0fk", sign, cvd / 1_000)
+        holder.tvCvd.text = if (Math.abs(cvd) >= 1_000_000) String.format(java.util.Locale.US, "%s$%.1fM", sign, cvd / 1_000_000)
+        else String.format(java.util.Locale.US, "%s$%.0fk", sign, cvd / 1_000)
 
         holder.tvCvd.setTextColor(if (cvd > 0) Color.parseColor("#00E676") else if (cvd < 0) Color.parseColor("#FF3D71") else Color.WHITE)
-        holder.tvBuyRatio.text = String.format("%.1f%%", coin.buyRatio)
-        holder.tvOi.text = String.format("%+.2f%%", coin.oiDeltaPct)
+        holder.tvBuyRatio.text = String.format(java.util.Locale.US, "%.1f%%", coin.buyRatio)
+        holder.tvOi.text = String.format(java.util.Locale.US, "%+.2f%%", coin.oiDeltaPct)
     }
 
     override fun getItemCount(): Int = coins.size

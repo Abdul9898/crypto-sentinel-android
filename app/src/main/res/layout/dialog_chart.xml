@@ -19,7 +19,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="📈 JCT / USDT (1m Candles)"
+            android:text="📈 JCT / USDT"
             android:textColor="@color/primary_cyan"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -35,6 +35,56 @@
             android:textColor="@color/neon_red"
             android:textSize="11sp"
             android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Timeframe Interval Selector -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:text="Interval:"
+            android:textColor="@color/text_dim"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/btnTf1m"
+            android:layout_width="45dp"
+            android:layout_height="28dp"
+            android:layout_marginEnd="6dp"
+            android:background="@color/primary_cyan"
+            android:gravity="center"
+            android:text="1m"
+            android:textColor="@color/bg_dark"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnTf5m"
+            android:layout_width="45dp"
+            android:layout_height="28dp"
+            android:layout_marginEnd="6dp"
+            android:background="@color/card_border"
+            android:gravity="center"
+            android:text="5m"
+            android:textColor="@color/text_white"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/btnTf15m"
+            android:layout_width="45dp"
+            android:layout_height="28dp"
+            android:background="@color/card_border"
+            android:gravity="center"
+            android:text="15m"
+            android:textColor="@color/text_white"
+            android:textSize="11sp" />
     </LinearLayout>
 
     <!-- Trade Info Levels -->
@@ -74,10 +124,10 @@
             android:textSize="11sp" />
     </LinearLayout>
 
-    <!-- Candlestick WebView Chart Container -->
+    <!-- Candlestick + CVD WebView Chart Container -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
-        android:layout_height="240dp"
+        android:layout_height="270dp"
         android:layout_marginTop="10dp"
         app:cardBackgroundColor="@color/card_bg"
         app:cardCornerRadius="8dp"

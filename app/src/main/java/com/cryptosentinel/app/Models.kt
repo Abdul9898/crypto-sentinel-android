@@ -71,16 +71,24 @@ data class PaperPosition(
     val symbol: String,
     val side: String, // "LONG" or "SHORT"
     val entryPrice: Double,
-    val sizeUsd: Double = 1000.0,
+    val sizeUsd: Double = 500.0,
+    val leverage: Int = 5,
     val tpPrice: Double,
-    val slPrice: Double,
+    var slPrice: Double,
+    val initialSlPrice: Double = slPrice,
     val tpPct: Double = 1.5,
     val slPct: Double = 0.8,
     val openTimeStr: String,
-    val triggerReason: String
+    val triggerReason: String,
+    var highestPrice: Double = entryPrice,
+    var lowestPrice: Double = entryPrice,
+    var isBreakEvenSet: Boolean = false,
+    var isTrailingActive: Boolean = false,
+    var statusNote: String = "ACTIVE"
 )
 
 data class PaperStats(
+    var initialCapital: Double = 10000.0,
     var balance: Double = 10000.0,
     var wins: Int = 0,
     var losses: Int = 0,
@@ -88,9 +96,17 @@ data class PaperStats(
 ) {
     val totalTrades: Int get() = wins + losses
     val winRate: Double get() = if (totalTrades > 0) (wins.toDouble() / totalTrades) * 100 else 0.0
-    val pnlUsd: Double get() = balance - 10000.0
-    val pnlPct: Double get() = (pnlUsd / 10000.0) * 100.0
+    val pnlUsd: Double get() = balance - initialCapital
+    val pnlPct: Double get() = if (initialCapital > 0) (pnlUsd / initialCapital) * 100.0 else 0.0
     val openCount: Int get() = openPositions.size
+
+    fun reset(newInitial: Double) {
+        initialCapital = newInitial
+        balance = newInitial
+        wins = 0
+        losses = 0
+        openPositions.clear()
+    }
 }
 
 data class CandleStick(
@@ -110,10 +126,34 @@ data class TradeStory(
     val exitPrice: Double,
     val pnlUsd: Double,
     val pnlPct: Double,
-    val outcome: String, // "WIN (TP)", "LOSS (SL)", "MANUAL"
+    val outcome: String, // "WIN (TP)", "WIN (TRAIL)", "LOSS (SL)", "MANUAL"
     val entryTime: String,
     val exitTime: String,
     val triggerReason: String,
     val tpPrice: Double,
     val slPrice: Double
 )
+
+data class DepthRadarState(
+    val symbol: String = "",
+    val bidVolumeUsd: Double = 0.0,
+    val askVolumeUsd: Double = 0.0,
+    val bidRatioPct: Double = 50.0,
+    val topBidWallPrice: Double = 0.0,
+    val topBidWallUsd: Double = 0.0,
+    val topAskWallPrice: Double = 0.0,
+    val topAskWallUsd: Double = 0.0,
+    val status: String = "Neutral"
+)
+
+data class TradingSettings(
+    var startingBalance: Double = 10000.0,
+    var positionSizeUsd: Double = 500.0,
+    var leverage: Int = 5,
+    var isBreakEvenEnabled: Boolean = true,
+    var beTriggerPct: Double = 1.5,
+    var isTrailingEnabled: Boolean = true,
+    var trailingTriggerPct: Double = 2.0,
+    var trailingDistancePct: Double = 1.2
+)
+

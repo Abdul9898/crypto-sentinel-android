@@ -23,12 +23,27 @@
             android:textSize="18sp"
             android:textStyle="bold" />
 
+        <TextView
+            android:id="@+id/btnOpenSettings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:background="@color/card_border"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp"
+            android:text="⚙️ Risk"
+            android:textColor="@color/text_white"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
         <com.google.android.material.switchmaterial.SwitchMaterial
             android:id="@+id/switchService"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:checked="true"
-            android:text="24/7 Monitor"
+            android:text="24/7"
             android:textColor="@color/text_white" />
     </LinearLayout>
 
@@ -75,9 +90,113 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:padding="6dp"
-                android:text="Waiting for whale clusters (&gt; $250k) to auto-trade..."
+                android:text="Waiting for whale clusters (&gt; $35k) to auto-trade..."
                 android:textColor="@color/primary_cyan"
                 android:textSize="11sp" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Whale Depth Wall Radar Card -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        app:cardBackgroundColor="@color/card_bg"
+        app:cardCornerRadius="10dp"
+        app:strokeColor="@color/card_border"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvRadarSymbol"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="🎯 RADAR: BTC"
+                    android:textColor="@color/primary_cyan"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvRadarStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⚖️ SCANNING L2..."
+                    android:textColor="@color/gold_accent"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Dual-Color Depth Bar (Bids Green vs Asks Red) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="14dp"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/barBids"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="50"
+                    android:background="@color/neon_green"
+                    android:gravity="center"
+                    android:text="50% Bids"
+                    android:textColor="@color/bg_dark"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/barAsks"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="50"
+                    android:background="@color/neon_red"
+                    android:gravity="center"
+                    android:text="50% Asks"
+                    android:textColor="@color/text_white"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Wall Info Badges -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvBidWall"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="🟢 Wall: $0"
+                    android:textColor="@color/neon_green"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/tvAskWall"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="end"
+                    android:text="🔴 Wall: $0"
+                    android:textColor="@color/neon_red"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
@@ -136,7 +255,7 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvCoins"
         android:layout_width="match_parent"
-        android:layout_height="160dp"
+        android:layout_height="140dp"
         android:clipToPadding="false"
         android:scrollbars="vertical" />
 
@@ -144,7 +263,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="8dp"
         android:layout_marginBottom="4dp"
         android:text="LIVE LEADING SIGNALS &amp; WALLS"
         android:textColor="@color/text_dim"

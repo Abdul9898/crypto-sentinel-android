@@ -46,17 +46,27 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.3' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.0.3' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.0' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.0' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.0.3
+            ## ⚡ Crypto Sentinel Android v1.1.0 (Major Feature Release)
             
-            ### 🚀 What's New in v1.0.3:
-            - 🛡️ **Bulletproof Crash Fix**: Fixed the UI thread format string exception that caused the "Crypto Sentinel has stopped" dialog on trade entries. All UI updates now guarded by error boundaries.
-            - 📈 **Interactive Candlestick Chart View**: Tap on any active position to view live 1-minute Bybit candles with visual **Entry Price**, **Take-Profit (TP)**, and **Stop-Loss (SL)** lines!
-            - 🛑 **Manual "Close Position Now" Action**: One-tap manual exit button right on the chart dialog so you can exit any position anytime.
-            - 📖 **Trade Story & Recent Exits Log**: Displays the complete history of closed trades (Entry, Exit, Win/Loss, PnL in $, and holding time) with tap-to-view historical chart.
-            - 🎯 **3-Tier Adaptive Calculations**: Tier 1 (Mega caps), Tier 2 (Mid caps), and Tier 3 (Small alts with $35k whale burst thresholds).
+            ### 🚀 What's New in v1.1.0:
+            - 🛡️ **Trailing Stop-Loss & Auto Break-Even**:
+              - Automatically moves Stop-Loss to Entry (+0.06% buffer) once in +1.5% profit so winning trades never turn into losses.
+              - Dynamically trails 1.2% behind the peak price once profit exceeds +2.0%, riding massive pumps and locking in gains!
+            - 📈 **Multi-Timeframe Candlestick Chart (1m, 5m, 15m)**:
+              - Switch between 1-minute, 5-minute, and 15-minute Bybit linear candles with one tap.
+              - Visual Entry (Cyan), Take-Profit (Green), and dynamic Trailing Stop-Loss (Red) lines.
+            - 📊 **CVD Order-Flow Volume Sub-Chart**:
+              - Running Cumulative Volume Delta (CVD) gold line and buy/sell volume bars plotted under the candles to visualize buyer vs seller delta aggression.
+            - ⚙️ **Trading Risk & Leverage Settings Panel**:
+              - Tap "⚙️ Risk" in header to customize Starting Capital, Position Size ($), Leverage (1x, 3x, 5x, 10x, 20x), and Break-Even/Trailing toggles.
+              - Reset Paper Account button.
+            - 🎯 **Live Whale Depth Wall Radar**:
+              - Real-time Bybit L2 order book scanner (top 50 levels).
+              - Visual dual-color Bid vs Ask volume ratio gauge.
+              - Highlights nearest major $50k-$200k+ Buy and Sell walls with exact price and depth value.
 
             ### 📥 Download
             Download `CryptoSentinel.apk` below and tap to install on your phone.
