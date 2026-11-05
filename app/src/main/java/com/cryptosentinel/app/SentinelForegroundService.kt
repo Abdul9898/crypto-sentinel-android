@@ -76,7 +76,6 @@ class SentinelForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            // 1. Silent ongoing foreground service channel
             val serviceChannel = NotificationChannel(
                 "sentinel_service_channel",
                 "Sentinel Background Service",
@@ -87,7 +86,6 @@ class SentinelForegroundService : Service() {
             }
             manager.createNotificationChannel(serviceChannel)
 
-            // 2. High priority alert channel with sound & vibration
             val alertChannel = NotificationChannel(
                 "sentinel_alerts_channel",
                 "Sentinel High Conviction Alerts",
@@ -150,13 +148,13 @@ class SentinelForegroundService : Service() {
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
                 val topics = mutableListOf<String>()
-                for (s in pairs) {
+                for (s in trackedCoins.keys) {
                     topics.add("publicTrade.$s")
                     topics.add("tickers.$s")
                 }
                 val subMsg = mapOf("op" to "subscribe", "args" to topics)
                 ws.send(gson.toJson(subMsg))
-                updateServiceNotification("Monitoring 8 pairs on Bybit Linear")
+                updateServiceNotification("Monitoring active order flow & alts")
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
@@ -201,8 +199,11 @@ class SentinelForegroundService : Service() {
                 val sym = obj.get("symbol")?.asString ?: continue
                 if (!sym.endsWith("USDT")) continue
 
+                // Exclude US equity / stock perpetuals (SOXX, SOXS, STOCK)
+                if (sym.contains("STOCK") || sym in listOf("SOXXUSDT", "SOXSUSDT")) continue
+
                 val turnover = obj.get("turnover24h")?.asString?.toDoubleOrNull() ?: 0.0
-                if (turnover < 500_000.0) continue // Skip illiquid pairs
+                if (turnover < 250_000.0) continue // Skip zero-liquidity tokens
 
                 val pct = (obj.get("price24hPcnt")?.asString?.toDoubleOrNull() ?: 0.0) * 100.0
                 val price = obj.get("lastPrice")?.asString?.toDoubleOrNull() ?: 0.0
@@ -212,17 +213,27 @@ class SentinelForegroundService : Service() {
             }
 
             parsed.sortByDescending { it.change24hPct }
-            val top8 = parsed.take(8)
+            val top20 = parsed.take(20)
 
             synchronized(topGainers) {
                 topGainers.clear()
-                topGainers.addAll(top8)
+                topGainers.addAll(top20)
             }
 
-            // Check for breakout surge alerts (>= +18% 24h change with high volume)
+            // Dynamically subscribe to top 3 breakout small alts to catch their tape live!
+            for (g in top20.take(3)) {
+                val fullSym = if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
+                if (!trackedCoins.containsKey(fullSym)) {
+                    trackedCoins[fullSym] = CoinState(symbol = fullSym, price = g.price)
+                    val subMsg = mapOf("op" to "subscribe", "args" to listOf("publicTrade.$fullSym", "tickers.$fullSym"))
+                    webSocket?.send(gson.toJson(subMsg))
+                }
+            }
+
+            // Check for breakout surge alerts (>= +15% 24h change with high volume)
             val now = System.currentTimeMillis()
-            for (g in top8) {
-                if (g.change24hPct >= 18.0) {
+            for (g in top20) {
+                if (g.change24hPct >= 15.0) {
                     val lastAlert = alertedGainers[g.symbol] ?: 0L
                     if (now - lastAlert > 20 * 60 * 1000) { // 20 min cooldown per symbol
                         alertedGainers[g.symbol] = now
@@ -268,6 +279,8 @@ class SentinelForegroundService : Service() {
                 val arr = data.asJsonArray
 
                 val now = System.currentTimeMillis()
+                val tierConfig = TierCalculator.getConfig(sym)
+
                 for (item in arr) {
                     val trade = item.asJsonObject
                     val p = trade.get("p").asDouble
@@ -283,27 +296,27 @@ class SentinelForegroundService : Service() {
                     // Check active positions on every trade execution
                     checkOpenPositions(sym, p)
 
-                    // Whale order check (> $100k)
-                    if (usdVal >= 100_000) {
+                    // Relative Whale order check based on Coin Tier
+                    if (usdVal >= tierConfig.minWhaleOrder) {
                         recentWhaleTrades.add(WhaleRecord(now, sym, isBuy, usdVal, p))
                         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
                         val sideIcon = if (isBuy) "🟢 BUY" else "🔴 SELL"
                         val cleanSym = sym.replace("1000", "").replace("USDT", "")
-                        val msg = "$sideIcon Whale: $${String.format("%,.0f", usdVal)} @ $${String.format("%,.2f", p)}"
+                        val msg = "$sideIcon Whale: $${String.format("%,.0f", usdVal)} @ $${String.format("%,.4f", p)}"
                         val alert = AlertItem(
                             timeStr = timeStr,
                             symbol = cleanSym,
                             type = "WHALE_TRADE",
-                            conviction = if (usdVal >= 250_000) "HIGH" else "MEDIUM",
+                            conviction = if (usdVal >= tierConfig.clusterThreshold) "HIGH" else "MEDIUM",
                             message = msg
                         )
                         addAlert(alert)
-                        if (usdVal >= 300_000) {
+                        if (usdVal >= tierConfig.clusterThreshold) {
                             sendAlertNotification("🐋 Whale Order ($cleanSym)", msg)
                         }
 
                         // Evaluate Whale Cluster Auto-Trading
-                        evaluateWhaleCluster(sym, p, now, timeStr)
+                        evaluateWhaleCluster(sym, p, now, timeStr, tierConfig)
                     }
                 }
                 onStateChangedListener?.invoke()
@@ -311,7 +324,7 @@ class SentinelForegroundService : Service() {
         } catch (_: Exception) {}
     }
 
-    private fun evaluateWhaleCluster(sym: String, currentPrice: Double, now: Long, timeStr: String) {
+    private fun evaluateWhaleCluster(sym: String, currentPrice: Double, now: Long, timeStr: String, config: CoinTierConfig) {
         // 1. Clean up trades older than 6 seconds
         synchronized(recentWhaleTrades) {
             val cutoff = now - 6000
@@ -337,13 +350,13 @@ class SentinelForegroundService : Service() {
         }
         if (hasOpenPos) return
 
-        val clusterThreshold = 250_000.0
+        val clusterThreshold = config.clusterThreshold
 
         if (buyVol >= clusterThreshold && buyVol > sellVol * 1.5) {
-            // Auto ENTER LONG
+            // Auto ENTER LONG with Tier-Specific TP/SL
             val entry = currentPrice
-            val tp = entry * 1.015 // +1.5%
-            val sl = entry * 0.992 // -0.8%
+            val tp = entry * (1.0 + config.tpPct / 100.0)
+            val sl = entry * (1.0 - config.slPct / 100.0)
             val pos = PaperPosition(
                 symbol = sym,
                 side = "LONG",
@@ -351,6 +364,8 @@ class SentinelForegroundService : Service() {
                 sizeUsd = 1000.0,
                 tpPrice = tp,
                 slPrice = sl,
+                tpPct = config.tpPct,
+                slPct = config.slPct,
                 openTimeStr = timeStr,
                 triggerReason = "Whale Buy Cluster: $${String.format("%,.0f", buyVol)}"
             )
@@ -362,15 +377,15 @@ class SentinelForegroundService : Service() {
                 symbol = cleanSym,
                 type = "AUTO_TRADE",
                 conviction = "HIGH",
-                message = "🤖 AUTO LONG $cleanSym @ $${String.format("%,.2f", entry)} | TP: $${String.format("%,.2f", tp)} (+1.5%) | SL: $${String.format("%,.2f", sl)} (-0.8%) [Whale: $${String.format("%,.0f", buyVol)}]"
+                message = String.format("🤖 AUTO LONG %s @ $%,.4f | TP: +%.1f%% ($%,.4f) | SL: -%.1f%% ($%,.4f) [Whale: $%,.0f]", cleanSym, entry, config.tpPct, tp, config.slPct, sl, buyVol)
             )
             addAlert(alert)
-            sendAlertNotification("🤖 Auto-Trade Entry: LONG $cleanSym", "Entered $1,000 LONG @ $${String.format("%,.2f", entry)} | Cluster: $${String.format("%,.0f", buyVol)}")
+            sendAlertNotification("🤖 Auto-Trade: LONG $cleanSym", "Entered $1,000 LONG @ $${String.format("%,.4f", entry)} | Whale: $${String.format("%,.0f", buyVol)}")
         } else if (sellVol >= clusterThreshold && sellVol > buyVol * 1.5) {
-            // Auto ENTER SHORT
+            // Auto ENTER SHORT with Tier-Specific TP/SL
             val entry = currentPrice
-            val tp = entry * 0.985 // -1.5%
-            val sl = entry * 1.008 // +0.8%
+            val tp = entry * (1.0 - config.tpPct / 100.0)
+            val sl = entry * (1.0 + config.slPct / 100.0)
             val pos = PaperPosition(
                 symbol = sym,
                 side = "SHORT",
@@ -378,6 +393,8 @@ class SentinelForegroundService : Service() {
                 sizeUsd = 1000.0,
                 tpPrice = tp,
                 slPrice = sl,
+                tpPct = config.tpPct,
+                slPct = config.slPct,
                 openTimeStr = timeStr,
                 triggerReason = "Whale Sell Dump: $${String.format("%,.0f", sellVol)}"
             )
@@ -389,10 +406,10 @@ class SentinelForegroundService : Service() {
                 symbol = cleanSym,
                 type = "AUTO_TRADE",
                 conviction = "HIGH",
-                message = "🤖 AUTO SHORT $cleanSym @ $${String.format("%,.2f", entry)} | TP: $${String.format("%,.2f", tp)} (-1.5%) | SL: $${String.format("%,.2f", sl)} (+0.8%) [Whale: $${String.format("%,.0f", sellVol)}]"
+                message = String.format("🤖 AUTO SHORT %s @ $%,.4f | TP: -%.1f%% ($%,.4f) | SL: +%.1f%% ($%,.4f) [Whale: $%,.0f]", cleanSym, entry, config.tpPct, tp, config.slPct, sl, sellVol)
             )
             addAlert(alert)
-            sendAlertNotification("🤖 Auto-Trade Entry: SHORT $cleanSym", "Entered $1,000 SHORT @ $${String.format("%,.2f", entry)} | Dump: $${String.format("%,.0f", sellVol)}")
+            sendAlertNotification("🤖 Auto-Trade: SHORT $cleanSym", "Entered $1,000 SHORT @ $${String.format("%,.4f", entry)} | Dump: $${String.format("%,.0f", sellVol)}")
         }
     }
 
@@ -430,11 +447,12 @@ class SentinelForegroundService : Service() {
         val cleanSym = sym.replace("1000", "").replace("USDT", "")
 
         for ((pos, isWin) in toClose) {
-            val pnlUsd = if (isWin) pos.sizeUsd * 0.015 else -pos.sizeUsd * 0.008
+            val pnlPct = if (isWin) pos.tpPct else -pos.slPct
+            val pnlUsd = (pnlPct / 100.0) * pos.sizeUsd
             paperStats.balance += pnlUsd
             if (isWin) {
                 paperStats.wins++
-                val msg = "🏆 [WIN +1.5%] Closed ${pos.side} $cleanSym @ $${String.format("%,.2f", currentPrice)} (+$$15.00)"
+                val msg = String.format("🏆 [WIN +%.1f%%] Closed %s %s @ $%,.4f (+$$%,.2f)", pos.tpPct, pos.side, cleanSym, currentPrice, pnlUsd)
                 addAlert(AlertItem(
                     timeStr = timeStr,
                     symbol = cleanSym,
@@ -442,10 +460,10 @@ class SentinelForegroundService : Service() {
                     conviction = "HIGH",
                     message = msg
                 ))
-                sendAlertNotification("🏆 Trade Win! +$15.00 on $cleanSym", msg)
+                sendAlertNotification(String.format("🏆 Trade Win! +$%,.2f on %s", pnlUsd, cleanSym), msg)
             } else {
                 paperStats.losses++
-                val msg = "🛑 [SL -0.8%] Closed ${pos.side} $cleanSym @ $${String.format("%,.2f", currentPrice)} (-$$8.00)"
+                val msg = String.format("🛑 [SL -%.1f%%] Closed %s %s @ $%,.4f (-$$%,.2f)", pos.slPct, pos.side, cleanSym, currentPrice, Math.abs(pnlUsd))
                 addAlert(AlertItem(
                     timeStr = timeStr,
                     symbol = cleanSym,
@@ -453,7 +471,7 @@ class SentinelForegroundService : Service() {
                     conviction = "MEDIUM",
                     message = msg
                 ))
-                sendAlertNotification("🛑 Stop-Loss Hit (-$8.00) on $cleanSym", msg)
+                sendAlertNotification(String.format("🛑 Stop-Loss Hit (-$%,.2f) on %s", Math.abs(pnlUsd), cleanSym), msg)
             }
         }
     }

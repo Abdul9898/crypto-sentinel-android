@@ -134,11 +134,13 @@ class MainActivity : AppCompatActivity() {
                               else ((pos.entryPrice - curPrice) / pos.entryPrice) * 100
                 val pnlEst = (diffPct / 100.0) * pos.sizeUsd
                 val sideIcon = if (pos.side == "LONG") "🟢" else "🔴"
-                String.format("%s [%s %s] Entry: $%,.2f -> Now: $%,.2f (%+.2f%% / %+$%,.2f)", sideIcon, pos.side, sym, pos.entryPrice, curPrice, diffPct, pnlEst)
+                val pFormat = if (pos.entryPrice < 1.0) "$%,.4f" else "$%,.2f"
+                val curPFormat = if (curPrice < 1.0) "$%,.4f" else "$%,.2f"
+                String.format("%s [%s %s] Entry: " + pFormat + " -> Now: " + curPFormat + " (%+.2f%% / %+$%,.2f)", sideIcon, pos.side, sym, pos.entryPrice, curPrice, diffPct, pnlEst)
             }
             binding.tvActivePositions.text = openStr
         } else {
-            binding.tvActivePositions.text = "Waiting for whale clusters (> $250k) to auto-trade..."
+            binding.tvActivePositions.text = "⚡ Adaptive 3-Tier Auto-Trading Active (Waiting for Whale Flow)..."
         }
     }
 

@@ -46,16 +46,19 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.1' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.0.1' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.2' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.0.2' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.0.1
+            ## ⚡ Crypto Sentinel Android v1.0.2
             
-            ### 🚀 What's New in v1.0.1:
-            - 🤖 **Whale Cluster Auto-Trading**: Automatically opens simulated paper trades (Long/Short) when $250k+ whale volume clusters hit the tape, tracking TP (+1.5%) and SL (-0.8%) automatically.
-            - 🔥 **Live Bybit Breakout & Top Gainers Scanner**: Scans all Bybit Linear perpetuals in background every 15s to detect and display explosive runners (+10% to +40% gainers like UAI, AIO, etc.).
-            - 💼 **Active Positions in Scorecard**: Displays real-time open positions, entry prices, and floating PnL on the main dashboard.
-            - 🔔 **Instant Sound & Vibration Alerts**: Alerts on whale cluster executions and breakout spikes.
+            ### 🚀 What's New in v1.0.2:
+            - 🎯 **3-Tier Adaptive Calculations**:
+              - **Tier 1 (Mega Caps - BTC, ETH):** Institutional whale threshold $200k+, TP +1.2%, SL -0.6%.
+              - **Tier 2 (Mid Caps - SOL, DOGE, XRP, SUI, NEAR):** Threshold $75k+, TP +2.0%, SL -1.0%.
+              - **Tier 3 (Small Alts & Breakout Runners - UAI, AIO, JCT, ELSA, etc.):** Realistic $35k whale burst threshold, TP +4.0%, SL -2.0%!
+            - 🛰️ **Dynamic Breakout WebSocket Subscription**: Automatically hooks into the top 3 surging altcoins live so you catch their volume spikes as they happen.
+            - 🔥 **Expanded Top Gainers Strip**: Displays top 20 surging crypto alts across Bybit (filtering out US stock ETFs).
+            - 💎 **High Precision Price Display**: Formats small altcoins with 4 decimal places ($0.0418) for pinpoint clarity.
 
             ### 📥 Download
             Download `CryptoSentinel.apk` below and tap to install on your phone.
