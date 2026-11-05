@@ -72,12 +72,35 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="5dp"
                 android:background="#151A22"
+                android:clickable="true"
+                android:focusable="true"
                 android:padding="6dp"
                 android:text="Waiting for whale clusters (&gt; $250k) to auto-trade..."
                 android:textColor="@color/primary_cyan"
                 android:textSize="11sp" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
+
+    <!-- Trade Stories Header -->
+    <TextView
+        android:id="@+id/tvStoriesHeader"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="4dp"
+        android:text="📖 TRADE STORY (RECENT EXITS - TAP FOR CHART)"
+        android:textColor="@color/text_dim"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <!-- Trade Stories List -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvStories"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipToPadding="false"
+        android:visibility="gone" />
 
     <!-- Top Gainers Header -->
     <TextView

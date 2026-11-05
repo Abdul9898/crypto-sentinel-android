@@ -27,6 +27,7 @@ class SentinelForegroundService : Service() {
     val trackedCoins = ConcurrentHashMap<String, CoinState>()
     val alertsList = Collections.synchronizedList(mutableListOf<AlertItem>())
     val topGainers = Collections.synchronizedList(mutableListOf<GainerItem>())
+    val tradeStories = Collections.synchronizedList(mutableListOf<TradeStory>())
     val paperStats = PaperStats()
 
     private val recentWhaleTrades = Collections.synchronizedList(mutableListOf<WhaleRecord>())
@@ -220,7 +221,7 @@ class SentinelForegroundService : Service() {
                 topGainers.addAll(top20)
             }
 
-            // Dynamically subscribe to top 3 breakout small alts to catch their tape live!
+            // Dynamically subscribe to top 3 breakout small alts so we catch their tape live!
             for (g in top20.take(3)) {
                 val fullSym = if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
                 if (!trackedCoins.containsKey(fullSym)) {
@@ -238,17 +239,18 @@ class SentinelForegroundService : Service() {
                     if (now - lastAlert > 20 * 60 * 1000) { // 20 min cooldown per symbol
                         alertedGainers[g.symbol] = now
                         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
-                        val volStr = if (g.turnoverUsd >= 1_000_000) String.format("$%.1fM", g.turnoverUsd / 1_000_000)
-                        else String.format("$%.0fK", g.turnoverUsd / 1_000)
+                        val volStr = if (g.turnoverUsd >= 1_000_000) String.format(Locale.US, "$%.1fM", g.turnoverUsd / 1_000_000)
+                        else String.format(Locale.US, "$%.0fK", g.turnoverUsd / 1_000)
+                        val pStr = if (g.price < 1.0) String.format(Locale.US, "$%.4f", g.price) else String.format(Locale.US, "$%.2f", g.price)
                         val alert = AlertItem(
                             timeStr = timeStr,
                             symbol = g.symbol,
                             type = "BREAKOUT",
                             conviction = "HIGH",
-                            message = "🚀 TOP BREAKOUT: ${g.symbol} +${String.format("%.1f", g.change24hPct)}% (Vol: $volStr) @ $${String.format("%.4f", g.price)}"
+                            message = "🚀 TOP BREAKOUT: ${g.symbol} +${String.format(Locale.US, "%.1f", g.change24hPct)}% (Vol: $volStr) @ $pStr"
                         )
                         addAlert(alert)
-                        sendAlertNotification("🚀 Breakout: ${g.symbol} +${String.format("%.1f", g.change24hPct)}%", "Surging on Bybit with $volStr volume @ $${String.format("%.4f", g.price)}")
+                        sendAlertNotification("🚀 Breakout: ${g.symbol} +${String.format(Locale.US, "%.1f", g.change24hPct)}%", "Surging on Bybit with $volStr volume @ $pStr")
                     }
                 }
             }
@@ -302,7 +304,8 @@ class SentinelForegroundService : Service() {
                         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
                         val sideIcon = if (isBuy) "🟢 BUY" else "🔴 SELL"
                         val cleanSym = sym.replace("1000", "").replace("USDT", "")
-                        val msg = "$sideIcon Whale: $${String.format("%,.0f", usdVal)} @ $${String.format("%,.4f", p)}"
+                        val pStr = if (p < 1.0) String.format(Locale.US, "$%.4f", p) else String.format(Locale.US, "$%.2f", p)
+                        val msg = "$sideIcon Whale: $${String.format(Locale.US, "%,.0f", usdVal)} @ $pStr"
                         val alert = AlertItem(
                             timeStr = timeStr,
                             symbol = cleanSym,
@@ -367,20 +370,21 @@ class SentinelForegroundService : Service() {
                 tpPct = config.tpPct,
                 slPct = config.slPct,
                 openTimeStr = timeStr,
-                triggerReason = "Whale Buy Cluster: $${String.format("%,.0f", buyVol)}"
+                triggerReason = "Whale Buy Cluster: $${String.format(Locale.US, "%,.0f", buyVol)}"
             )
             synchronized(paperStats.openPositions) {
                 paperStats.openPositions.add(pos)
             }
+            val pStr = if (entry < 1.0) String.format(Locale.US, "$%.4f", entry) else String.format(Locale.US, "$%.2f", entry)
             val alert = AlertItem(
                 timeStr = timeStr,
                 symbol = cleanSym,
                 type = "AUTO_TRADE",
                 conviction = "HIGH",
-                message = String.format("🤖 AUTO LONG %s @ $%,.4f | TP: +%.1f%% ($%,.4f) | SL: -%.1f%% ($%,.4f) [Whale: $%,.0f]", cleanSym, entry, config.tpPct, tp, config.slPct, sl, buyVol)
+                message = "🤖 AUTO LONG $cleanSym @ $pStr | TP: +${config.tpPct}% | SL: -${config.slPct}% [Whale: $${String.format(Locale.US, "%,.0f", buyVol)}]"
             )
             addAlert(alert)
-            sendAlertNotification("🤖 Auto-Trade: LONG $cleanSym", "Entered $1,000 LONG @ $${String.format("%,.4f", entry)} | Whale: $${String.format("%,.0f", buyVol)}")
+            sendAlertNotification("🤖 Auto-Trade: LONG $cleanSym", "Entered $1,000 LONG @ $pStr | Whale: $${String.format(Locale.US, "%,.0f", buyVol)}")
         } else if (sellVol >= clusterThreshold && sellVol > buyVol * 1.5) {
             // Auto ENTER SHORT with Tier-Specific TP/SL
             val entry = currentPrice
@@ -396,20 +400,21 @@ class SentinelForegroundService : Service() {
                 tpPct = config.tpPct,
                 slPct = config.slPct,
                 openTimeStr = timeStr,
-                triggerReason = "Whale Sell Dump: $${String.format("%,.0f", sellVol)}"
+                triggerReason = "Whale Sell Dump: $${String.format(Locale.US, "%,.0f", sellVol)}"
             )
             synchronized(paperStats.openPositions) {
                 paperStats.openPositions.add(pos)
             }
+            val pStr = if (entry < 1.0) String.format(Locale.US, "$%.4f", entry) else String.format(Locale.US, "$%.2f", entry)
             val alert = AlertItem(
                 timeStr = timeStr,
                 symbol = cleanSym,
                 type = "AUTO_TRADE",
                 conviction = "HIGH",
-                message = String.format("🤖 AUTO SHORT %s @ $%,.4f | TP: -%.1f%% ($%,.4f) | SL: +%.1f%% ($%,.4f) [Whale: $%,.0f]", cleanSym, entry, config.tpPct, tp, config.slPct, sl, sellVol)
+                message = "🤖 AUTO SHORT $cleanSym @ $pStr | TP: -${config.tpPct}% | SL: +${config.slPct}% [Whale: $${String.format(Locale.US, "%,.0f", sellVol)}]"
             )
             addAlert(alert)
-            sendAlertNotification("🤖 Auto-Trade: SHORT $cleanSym", "Entered $1,000 SHORT @ $${String.format("%,.4f", entry)} | Dump: $${String.format("%,.0f", sellVol)}")
+            sendAlertNotification("🤖 Auto-Trade: SHORT $cleanSym", "Entered $1,000 SHORT @ $pStr | Dump: $${String.format(Locale.US, "%,.0f", sellVol)}")
         }
     }
 
@@ -450,9 +455,12 @@ class SentinelForegroundService : Service() {
             val pnlPct = if (isWin) pos.tpPct else -pos.slPct
             val pnlUsd = (pnlPct / 100.0) * pos.sizeUsd
             paperStats.balance += pnlUsd
+            val pStr = if (currentPrice < 1.0) String.format(Locale.US, "$%.4f", currentPrice) else String.format(Locale.US, "$%.2f", currentPrice)
+            val pnlStr = String.format(Locale.US, "$%,.2f", Math.abs(pnlUsd))
+
             if (isWin) {
                 paperStats.wins++
-                val msg = String.format("🏆 [WIN +%.1f%%] Closed %s %s @ $%,.4f (+$$%,.2f)", pos.tpPct, pos.side, cleanSym, currentPrice, pnlUsd)
+                val msg = "🏆 [WIN +${pos.tpPct}%] Closed ${pos.side} $cleanSym @ $pStr (+$pnlStr)"
                 addAlert(AlertItem(
                     timeStr = timeStr,
                     symbol = cleanSym,
@@ -460,10 +468,10 @@ class SentinelForegroundService : Service() {
                     conviction = "HIGH",
                     message = msg
                 ))
-                sendAlertNotification(String.format("🏆 Trade Win! +$%,.2f on %s", pnlUsd, cleanSym), msg)
+                sendAlertNotification("🏆 Trade Win! +$pnlStr on $cleanSym", msg)
             } else {
                 paperStats.losses++
-                val msg = String.format("🛑 [SL -%.1f%%] Closed %s %s @ $%,.4f (-$$%,.2f)", pos.slPct, pos.side, cleanSym, currentPrice, Math.abs(pnlUsd))
+                val msg = "🛑 [SL -${pos.slPct}%] Closed ${pos.side} $cleanSym @ $pStr (-$pnlStr)"
                 addAlert(AlertItem(
                     timeStr = timeStr,
                     symbol = cleanSym,
@@ -471,7 +479,122 @@ class SentinelForegroundService : Service() {
                     conviction = "MEDIUM",
                     message = msg
                 ))
-                sendAlertNotification(String.format("🛑 Stop-Loss Hit (-$%,.2f) on %s", Math.abs(pnlUsd), cleanSym), msg)
+                sendAlertNotification("🛑 Stop-Loss Hit (-$pnlStr) on $cleanSym", msg)
+            }
+
+            // Record into Trade Story
+            val story = TradeStory(
+                symbol = cleanSym,
+                side = pos.side,
+                entryPrice = pos.entryPrice,
+                exitPrice = currentPrice,
+                pnlUsd = pnlUsd,
+                pnlPct = pnlPct,
+                outcome = if (isWin) "WIN (TP)" else "LOSS (SL)",
+                entryTime = pos.openTimeStr,
+                exitTime = timeStr,
+                triggerReason = pos.triggerReason,
+                tpPrice = pos.tpPrice,
+                slPrice = pos.slPrice
+            )
+            tradeStories.add(0, story)
+            if (tradeStories.size > 40) tradeStories.removeAt(tradeStories.size - 1)
+        }
+    }
+
+    fun closePositionManually(positionId: String) {
+        var closedPos: PaperPosition? = null
+        var curPrice = 0.0
+        synchronized(paperStats.openPositions) {
+            val it = paperStats.openPositions.iterator()
+            while (it.hasNext()) {
+                val p = it.next()
+                if (p.id == positionId) {
+                    closedPos = p
+                    curPrice = trackedCoins[p.symbol]?.price ?: p.entryPrice
+                    it.remove()
+                    break
+                }
+            }
+        }
+
+        val pos = closedPos ?: return
+        val isLong = pos.side == "LONG"
+        val diffPct = if (isLong) ((curPrice - pos.entryPrice) / pos.entryPrice) * 100.0
+                      else ((pos.entryPrice - curPrice) / pos.entryPrice) * 100.0
+        val pnlUsd = (diffPct / 100.0) * pos.sizeUsd
+        paperStats.balance += pnlUsd
+        if (pnlUsd >= 0) paperStats.wins++ else paperStats.losses++
+
+        val nowStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        val cleanSym = pos.symbol.replace("1000", "").replace("USDT", "")
+        val pStr = if (curPrice < 1.0) String.format(Locale.US, "$%.4f", curPrice) else String.format(Locale.US, "$%.2f", curPrice)
+        val pnlSign = if (pnlUsd >= 0) "+" else "-"
+        val pnlStr = String.format(Locale.US, "%s$%,.2f", pnlSign, Math.abs(pnlUsd))
+
+        val story = TradeStory(
+            symbol = cleanSym,
+            side = pos.side,
+            entryPrice = pos.entryPrice,
+            exitPrice = curPrice,
+            pnlUsd = pnlUsd,
+            pnlPct = diffPct,
+            outcome = "MANUAL EXIT",
+            entryTime = pos.openTimeStr,
+            exitTime = nowStr,
+            triggerReason = pos.triggerReason,
+            tpPrice = pos.tpPrice,
+            slPrice = pos.slPrice
+        )
+        tradeStories.add(0, story)
+        if (tradeStories.size > 40) tradeStories.removeAt(tradeStories.size - 1)
+
+        val msg = "✋ [MANUAL CLOSE] Closed ${pos.side} $cleanSym @ $pStr ($pnlStr)"
+        addAlert(AlertItem(
+            timeStr = nowStr,
+            symbol = cleanSym,
+            type = "MANUAL_CLOSE",
+            conviction = "HIGH",
+            message = msg
+        ))
+        sendAlertNotification("✋ Position Closed: $cleanSym", msg)
+        onStateChangedListener?.invoke()
+    }
+
+    fun fetchKlines(symbol: String, callback: (List<CandleStick>) -> Unit) {
+        serviceScope.launch {
+            try {
+                val fullSym = if (symbol.endsWith("USDT")) symbol else "${symbol}USDT"
+                val request = Request.Builder()
+                    .url("https://api.bybit.com/v5/market/kline?category=linear&symbol=$fullSym&interval=1&limit=35")
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        withContext(Dispatchers.Main) { callback(emptyList()) }
+                        return@launch
+                    }
+                    val body = response.body?.string() ?: return@launch
+                    val root = gson.fromJson(body, JsonObject::class.java)
+                    val result = root.getAsJsonObject("result")
+                    val list = result.getAsJsonArray("list")
+                    val candles = mutableListOf<CandleStick>()
+                    for (item in list) {
+                        val arr = item.asJsonArray
+                        val t = arr[0].asString.toLongOrNull() ?: 0L
+                        val o = arr[1].asString.toDoubleOrNull() ?: 0.0
+                        val h = arr[2].asString.toDoubleOrNull() ?: 0.0
+                        val l = arr[3].asString.toDoubleOrNull() ?: 0.0
+                        val c = arr[4].asString.toDoubleOrNull() ?: 0.0
+                        val v = arr[5].asString.toDoubleOrNull() ?: 0.0
+                        candles.add(CandleStick(t, o, h, l, c, v))
+                    }
+                    candles.reverse() // Chronological order
+                    withContext(Dispatchers.Main) {
+                        callback(candles)
+                    }
+                }
+            } catch (_: Exception) {
+                withContext(Dispatchers.Main) { callback(emptyList()) }
             }
         }
     }

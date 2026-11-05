@@ -106,3 +106,44 @@ class GainerAdapter(private val gainers: List<GainerItem>) : RecyclerView.Adapte
 
     override fun getItemCount(): Int = gainers.size
 }
+
+class TradeStoryAdapter(
+    private val stories: List<TradeStory>,
+    private val onItemClick: (TradeStory) -> Unit
+) : RecyclerView.Adapter<TradeStoryAdapter.StoryViewHolder>() {
+
+    class StoryViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val tvOutcome: TextView = view.findViewById(R.id.tvStoryOutcome)
+        val tvSymbol: TextView = view.findViewById(R.id.tvStorySymbol)
+        val tvPnl: TextView = view.findViewById(R.id.tvStoryPnl)
+        val tvDetails: TextView = view.findViewById(R.id.tvStoryDetails)
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StoryViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_trade_story, parent, false)
+        return StoryViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: StoryViewHolder, position: Int) {
+        val story = stories[position]
+        holder.tvOutcome.text = story.outcome
+        holder.tvSymbol.text = "${story.side} ${story.symbol}"
+
+        val sign = if (story.pnlUsd >= 0) "+" else "-"
+        holder.tvPnl.text = String.format(java.util.Locale.US, "%s$%,.2f", sign, Math.abs(story.pnlUsd))
+        val isWin = story.pnlUsd >= 0
+        holder.tvPnl.setTextColor(if (isWin) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
+        holder.tvOutcome.setTextColor(if (isWin) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
+
+        val pFormat = if (story.entryPrice < 1.0) "$%,.4f" else "$%,.2f"
+        val entryStr = String.format(java.util.Locale.US, pFormat, story.entryPrice)
+        val exitStr = String.format(java.util.Locale.US, pFormat, story.exitPrice)
+        holder.tvDetails.text = "Entry: $entryStr -> Exit: $exitStr [${story.exitTime}]"
+
+        holder.itemView.setOnClickListener {
+            onItemClick(story)
+        }
+    }
+
+    override fun getItemCount(): Int = stories.size
+}

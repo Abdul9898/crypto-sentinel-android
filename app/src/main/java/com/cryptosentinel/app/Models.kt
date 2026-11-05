@@ -92,3 +92,28 @@ data class PaperStats(
     val pnlPct: Double get() = (pnlUsd / 10000.0) * 100.0
     val openCount: Int get() = openPositions.size
 }
+
+data class CandleStick(
+    val timestamp: Long,
+    val open: Double,
+    val high: Double,
+    val low: Double,
+    val close: Double,
+    val volume: Double
+)
+
+data class TradeStory(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val symbol: String,
+    val side: String, // "LONG" or "SHORT"
+    val entryPrice: Double,
+    val exitPrice: Double,
+    val pnlUsd: Double,
+    val pnlPct: Double,
+    val outcome: String, // "WIN (TP)", "LOSS (SL)", "MANUAL"
+    val entryTime: String,
+    val exitTime: String,
+    val triggerReason: String,
+    val tpPrice: Double,
+    val slPrice: Double
+)
