@@ -34,8 +34,15 @@ class SentinelForegroundService : Service() {
 
     private val recentWhaleTrades = Collections.synchronizedList(mutableListOf<WhaleRecord>())
     private val alertedGainers = ConcurrentHashMap<String, Long>()
+    private val lastRadarTradeTime = ConcurrentHashMap<String, Long>()
 
     var onStateChangedListener: (() -> Unit)? = null
+
+    // UI Throttling
+    private var lastUiNotifyTime = 0L
+
+    // Notification Throttling
+    private var lastNotificationTime = 0L
 
     private val client = OkHttpClient.Builder()
         .pingInterval(20, TimeUnit.SECONDS)
@@ -78,6 +85,14 @@ class SentinelForegroundService : Service() {
         connectWebSocket()
         startGainersScanner()
         startDepthRadarScanner()
+    }
+
+    fun scheduleUiUpdate(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (force || now - lastUiNotifyTime >= 400L) {
+            lastUiNotifyTime = now
+            onStateChangedListener?.invoke()
+        }
     }
 
     private fun createNotificationChannels() {
@@ -125,6 +140,10 @@ class SentinelForegroundService : Service() {
 
     private fun sendAlertNotification(title: String, message: String) {
         try {
+            val now = System.currentTimeMillis()
+            if (now - lastNotificationTime < 3000L) return // Rate-limit to 1 per 3 seconds
+            lastNotificationTime = now
+
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
@@ -197,7 +216,7 @@ class SentinelForegroundService : Service() {
                 try {
                     fetchDepthRadar()
                 } catch (_: Exception) {}
-                delay(4000)
+                delay(3500)
             }
         }
     }
@@ -220,7 +239,7 @@ class SentinelForegroundService : Service() {
                 val sym = obj.get("symbol")?.asString ?: continue
                 if (!sym.endsWith("USDT")) continue
 
-                // Exclude US equity / stock perpetuals
+                // Exclude traditional stock-named perpetuals
                 if (sym.contains("STOCK") || sym in listOf("SOXXUSDT", "SOXSUSDT")) continue
 
                 val turnover = obj.get("turnover24h")?.asString?.toDoubleOrNull() ?: 0.0
@@ -273,87 +292,261 @@ class SentinelForegroundService : Service() {
                 }
             }
 
-            onStateChangedListener?.invoke()
+            scheduleUiUpdate()
         }
     }
 
     private fun fetchDepthRadar() {
-        val target = synchronized(paperStats.openPositions) {
+        val candidateSyms = mutableListOf<String>()
+        val openPosSym = synchronized(paperStats.openPositions) {
             paperStats.openPositions.firstOrNull()?.symbol
-        } ?: synchronized(topGainers) {
-            val g = topGainers.firstOrNull()
-            if (g != null) {
-                if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
-            } else "BTCUSDT"
         }
 
-        val fullSym = if (target.endsWith("USDT")) target else "${target}USDT"
-        val request = Request.Builder()
-            .url("https://api.bybit.com/v5/market/orderbook?category=linear&symbol=$fullSym&limit=50")
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return
-            val bodyStr = response.body?.string() ?: return
-            val root = gson.fromJson(bodyStr, JsonObject::class.java) ?: return
-            val result = root.getAsJsonObject("result") ?: return
-            val bArray = result.getAsJsonArray("b") ?: return
-            val aArray = result.getAsJsonArray("a") ?: return
-
-            var bidVol = 0.0
-            var askVol = 0.0
-            var topBidP = 0.0
-            var topBidUsd = 0.0
-            var topAskP = 0.0
-            var topAskUsd = 0.0
-
-            for (item in bArray) {
-                val arr = item.asJsonArray
-                val p = arr[0].asString.toDoubleOrNull() ?: 0.0
-                val q = arr[1].asString.toDoubleOrNull() ?: 0.0
-                val usd = p * q
-                bidVol += usd
-                if (usd > topBidUsd) {
-                    topBidUsd = usd
-                    topBidP = p
+        if (openPosSym != null) {
+            candidateSyms.add(openPosSym)
+        } else {
+            synchronized(topGainers) {
+                for (g in topGainers.take(3)) {
+                    val s = if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
+                    candidateSyms.add(s)
                 }
             }
-
-            for (item in aArray) {
-                val arr = item.asJsonArray
-                val p = arr[0].asString.toDoubleOrNull() ?: 0.0
-                val q = arr[1].asString.toDoubleOrNull() ?: 0.0
-                val usd = p * q
-                askVol += usd
-                if (usd > topAskUsd) {
-                    topAskUsd = usd
-                    topAskP = p
-                }
-            }
-
-            val total = bidVol + askVol
-            val ratio = if (total > 0) (bidVol / total) * 100.0 else 50.0
-            val cleanSym = fullSym.replace("1000", "").replace("USDT", "")
-
-            val statusText = when {
-                ratio >= 65.0 -> "🟢 HEAVY BUY WALLS (+${String.format(Locale.US, "%.0f", ratio - 50)}%)"
-                ratio <= 35.0 -> "🔴 HEAVY SELL WALLS (-${String.format(Locale.US, "%.0f", 50 - ratio)}%)"
-                else -> "⚖️ BALANCED L2 DEPTH"
-            }
-
-            depthRadarState = DepthRadarState(
-                symbol = cleanSym,
-                bidVolumeUsd = bidVol,
-                askVolumeUsd = askVol,
-                bidRatioPct = ratio,
-                topBidWallPrice = topBidP,
-                topBidWallUsd = topBidUsd,
-                topAskWallPrice = topAskP,
-                topAskWallUsd = topAskUsd,
-                status = statusText
-            )
-            onStateChangedListener?.invoke()
         }
+        if (candidateSyms.isEmpty()) candidateSyms.add("BTCUSDT")
+
+        var bestResult: DepthRadarState? = null
+        var bestImbalanceScore = -1.0
+
+        for (targetSym in candidateSyms) {
+            val fullSym = if (targetSym.endsWith("USDT")) targetSym else "${targetSym}USDT"
+            try {
+                val request = Request.Builder()
+                    .url("https://api.bybit.com/v5/market/orderbook?category=linear&symbol=$fullSym&limit=50")
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+                    val bodyStr = response.body?.string() ?: return@use
+                    val root = gson.fromJson(bodyStr, JsonObject::class.java) ?: return@use
+                    val result = root.getAsJsonObject("result") ?: return@use
+                    val bArray = result.getAsJsonArray("b") ?: return@use
+                    val aArray = result.getAsJsonArray("a") ?: return@use
+
+                    var bidVol = 0.0
+                    var askVol = 0.0
+                    var topBidP = 0.0
+                    var topBidUsd = 0.0
+                    var topAskP = 0.0
+                    var topAskUsd = 0.0
+
+                    for (item in bArray) {
+                        val arr = item.asJsonArray
+                        val p = arr[0].asString.toDoubleOrNull() ?: 0.0
+                        val q = arr[1].asString.toDoubleOrNull() ?: 0.0
+                        val usd = p * q
+                        bidVol += usd
+                        if (usd > topBidUsd) {
+                            topBidUsd = usd
+                            topBidP = p
+                        }
+                    }
+
+                    for (item in aArray) {
+                        val arr = item.asJsonArray
+                        val p = arr[0].asString.toDoubleOrNull() ?: 0.0
+                        val q = arr[1].asString.toDoubleOrNull() ?: 0.0
+                        val usd = p * q
+                        askVol += usd
+                        if (usd > topAskUsd) {
+                            topAskUsd = usd
+                            topAskP = p
+                        }
+                    }
+
+                    val total = bidVol + askVol
+                    val ratio = if (total > 0) (bidVol / total) * 100.0 else 50.0
+                    val cleanSym = fullSym.replace("1000", "").replace("USDT", "")
+
+                    val statusText = when {
+                        ratio >= 60.0 -> "🟢 HEAVY BUY WALLS (+${String.format(Locale.US, "%.0f", ratio - 50)}%)"
+                        ratio <= 40.0 -> "🔴 HEAVY SELL WALLS (-${String.format(Locale.US, "%.0f", 50 - ratio)}%)"
+                        else -> "⚖️ BALANCED L2 DEPTH"
+                    }
+
+                    val radarState = DepthRadarState(
+                        symbol = cleanSym,
+                        bidVolumeUsd = bidVol,
+                        askVolumeUsd = askVol,
+                        bidRatioPct = ratio,
+                        topBidWallPrice = topBidP,
+                        topBidWallUsd = topBidUsd,
+                        topAskWallPrice = topAskP,
+                        topAskWallUsd = topAskUsd,
+                        status = statusText
+                    )
+
+                    val imbalanceScore = Math.abs(ratio - 50.0)
+                    if (openPosSym != null || imbalanceScore > bestImbalanceScore) {
+                        bestImbalanceScore = imbalanceScore
+                        bestResult = radarState
+                    }
+
+                    // Evaluate Radar Signal Auto-Trade (Ratio >= 60% or <= 40%)
+                    evaluateRadarAutoTrade(fullSym, cleanSym, ratio, topBidUsd, topBidP, topAskUsd, topAskP)
+
+                    if (openPosSym != null) return@use
+                }
+            } catch (_: Exception) {}
+        }
+
+        bestResult?.let {
+            depthRadarState = it
+            scheduleUiUpdate()
+        }
+    }
+
+    private fun evaluateRadarAutoTrade(
+        fullSym: String,
+        cleanSym: String,
+        ratio: Double,
+        topBidUsd: Double,
+        topBidP: Double,
+        topAskUsd: Double,
+        topAskP: Double
+    ) {
+        val now = System.currentTimeMillis()
+        val lastTraded = lastRadarTradeTime[cleanSym] ?: 0L
+        if (now - lastTraded < 180_000L) return // 3-minute cooldown
+
+        val totalOpen = synchronized(paperStats.openPositions) { paperStats.openPositions.size }
+        if (totalOpen >= 3) return // Max 3 simultaneous open positions
+
+        val hasOpenPosOnCoin = synchronized(paperStats.openPositions) {
+            paperStats.openPositions.any { it.symbol == fullSym }
+        }
+        if (hasOpenPosOnCoin) return
+
+        val tierConfig = TierCalculator.getConfig(fullSym)
+        val minWallSize = tierConfig.minWhaleOrder * 0.7
+
+        if (ratio >= 60.0 && topBidUsd >= minWallSize) {
+            // BULLISH RADAR SIGNAL -> AUTO ENTER LONG!
+            lastRadarTradeTime[cleanSym] = now
+            val currentPrice = trackedCoins[fullSym]?.price.takeIf { it != null && it > 0 } ?: topBidP
+            if (currentPrice > 0) {
+                val entry = currentPrice
+                val tp = entry * (1.0 + tierConfig.tpPct / 100.0)
+                val sl = entry * (1.0 - tierConfig.slPct / 100.0)
+                val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
+                val pos = PaperPosition(
+                    symbol = fullSym,
+                    side = "LONG",
+                    entryPrice = entry,
+                    sizeUsd = settings.positionSizeUsd,
+                    leverage = settings.leverage,
+                    tpPrice = tp,
+                    slPrice = sl,
+                    tpPct = tierConfig.tpPct,
+                    slPct = tierConfig.slPct,
+                    openTimeStr = timeStr,
+                    triggerReason = "Radar Buy Wall: ${ratio.toInt()}% Bids ($${String.format(Locale.US, "%,.0f", topBidUsd)})"
+                )
+                synchronized(paperStats.openPositions) {
+                    paperStats.openPositions.add(pos)
+                }
+                val pStr = if (entry < 1.0) String.format(Locale.US, "$%.4f", entry) else String.format(Locale.US, "$%.2f", entry)
+                val alert = AlertItem(
+                    timeStr = timeStr,
+                    symbol = cleanSym,
+                    type = "RADAR_TRADE",
+                    conviction = "HIGH",
+                    message = "🎯 RADAR LONG $cleanSym @ $pStr | Bids: ${ratio.toInt()}% | Wall: $${String.format(Locale.US, "%,.0f", topBidUsd)} | ${settings.leverage}x"
+                )
+                addAlert(alert)
+                sendAlertNotification("🎯 Radar Signal: LONG $cleanSym", "Entered LONG @ $pStr (${settings.leverage}x) | ${ratio.toInt()}% Bids")
+                scheduleUiUpdate(force = true)
+            }
+        } else if (ratio <= 40.0 && topAskUsd >= minWallSize) {
+            // BEARISH RADAR SIGNAL -> AUTO ENTER SHORT!
+            lastRadarTradeTime[cleanSym] = now
+            val currentPrice = trackedCoins[fullSym]?.price.takeIf { it != null && it > 0 } ?: topAskP
+            if (currentPrice > 0) {
+                val entry = currentPrice
+                val tp = entry * (1.0 - tierConfig.tpPct / 100.0)
+                val sl = entry * (1.0 + tierConfig.slPct / 100.0)
+                val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
+                val pos = PaperPosition(
+                    symbol = fullSym,
+                    side = "SHORT",
+                    entryPrice = entry,
+                    sizeUsd = settings.positionSizeUsd,
+                    leverage = settings.leverage,
+                    tpPrice = tp,
+                    slPrice = sl,
+                    tpPct = tierConfig.tpPct,
+                    slPct = tierConfig.slPct,
+                    openTimeStr = timeStr,
+                    triggerReason = "Radar Sell Wall: ${(100 - ratio).toInt()}% Asks ($${String.format(Locale.US, "%,.0f", topAskUsd)})"
+                )
+                synchronized(paperStats.openPositions) {
+                    paperStats.openPositions.add(pos)
+                }
+                val pStr = if (entry < 1.0) String.format(Locale.US, "$%.4f", entry) else String.format(Locale.US, "$%.2f", entry)
+                val alert = AlertItem(
+                    timeStr = timeStr,
+                    symbol = cleanSym,
+                    type = "RADAR_TRADE",
+                    conviction = "HIGH",
+                    message = "🎯 RADAR SHORT $cleanSym @ $pStr | Asks: ${(100 - ratio).toInt()}% | Wall: $${String.format(Locale.US, "%,.0f", topAskUsd)} | ${settings.leverage}x"
+                )
+                addAlert(alert)
+                sendAlertNotification("🎯 Radar Signal: SHORT $cleanSym", "Entered SHORT @ $pStr (${settings.leverage}x) | ${(100 - ratio).toInt()}% Asks")
+                scheduleUiUpdate(force = true)
+            }
+        }
+    }
+
+    fun executeRadarTrade(side: String) {
+        val radar = depthRadarState
+        if (radar.symbol.isEmpty()) return
+        val fullSym = if (radar.symbol.endsWith("USDT")) radar.symbol else "${radar.symbol}USDT"
+        val tierConfig = TierCalculator.getConfig(fullSym)
+        val curPrice = trackedCoins[fullSym]?.price.takeIf { it != null && it > 0 }
+            ?: if (side == "LONG") radar.topBidWallPrice else radar.topAskWallPrice
+        if (curPrice <= 0) return
+
+        val isLong = side == "LONG"
+        val tp = if (isLong) curPrice * (1.0 + tierConfig.tpPct / 100.0) else curPrice * (1.0 - tierConfig.tpPct / 100.0)
+        val sl = if (isLong) curPrice * (1.0 - tierConfig.slPct / 100.0) else curPrice * (1.0 + tierConfig.slPct / 100.0)
+        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+
+        val pos = PaperPosition(
+            symbol = fullSym,
+            side = side,
+            entryPrice = curPrice,
+            sizeUsd = settings.positionSizeUsd,
+            leverage = settings.leverage,
+            tpPrice = tp,
+            slPrice = sl,
+            tpPct = tierConfig.tpPct,
+            slPct = tierConfig.slPct,
+            openTimeStr = timeStr,
+            triggerReason = "1-Tap Radar Trade (${radar.status})"
+        )
+        synchronized(paperStats.openPositions) {
+            paperStats.openPositions.add(pos)
+        }
+        val pStr = if (curPrice < 1.0) String.format(Locale.US, "$%.4f", curPrice) else String.format(Locale.US, "$%.2f", curPrice)
+        val alert = AlertItem(
+            timeStr = timeStr,
+            symbol = radar.symbol,
+            type = "MANUAL_TRADE",
+            conviction = "HIGH",
+            message = "⚡ 1-TAP RADAR $side ${radar.symbol} @ $pStr | ${settings.leverage}x"
+        )
+        addAlert(alert)
+        sendAlertNotification("⚡ Trade Entered: $side ${radar.symbol}", "Entered $side @ $pStr (${settings.leverage}x)")
+        scheduleUiUpdate(force = true)
     }
 
     private fun handleMessage(jsonText: String) {
@@ -371,7 +564,7 @@ class SentinelForegroundService : Service() {
                     coin.price = obj.get("lastPrice").asDouble
                     checkOpenPositions(sym, coin.price)
                 }
-                onStateChangedListener?.invoke()
+                scheduleUiUpdate()
             } else if (topic.startsWith("publicTrade.")) {
                 val sym = topic.substringAfter("publicTrade.")
                 val coin = trackedCoins[sym] ?: return
@@ -416,7 +609,7 @@ class SentinelForegroundService : Service() {
                         evaluateWhaleCluster(sym, p, now, timeStr, tierConfig)
                     }
                 }
-                onStateChangedListener?.invoke()
+                scheduleUiUpdate()
             }
         } catch (_: Exception) {}
     }
@@ -443,6 +636,9 @@ class SentinelForegroundService : Service() {
             paperStats.openPositions.any { it.symbol == sym }
         }
         if (hasOpenPos) return
+
+        val totalOpen = synchronized(paperStats.openPositions) { paperStats.openPositions.size }
+        if (totalOpen >= 3) return
 
         val clusterThreshold = config.clusterThreshold
 
@@ -476,6 +672,7 @@ class SentinelForegroundService : Service() {
             )
             addAlert(alert)
             sendAlertNotification("🤖 Auto-Trade: LONG $cleanSym", "Entered $${settings.positionSizeUsd.toInt()} (${settings.leverage}x) LONG @ $pStr | Whale: $${String.format(Locale.US, "%,.0f", buyVol)}")
+            scheduleUiUpdate(force = true)
         } else if (sellVol >= clusterThreshold && sellVol > buyVol * 1.5) {
             val entry = currentPrice
             val tp = entry * (1.0 - config.tpPct / 100.0)
@@ -506,6 +703,7 @@ class SentinelForegroundService : Service() {
             )
             addAlert(alert)
             sendAlertNotification("🤖 Auto-Trade: SHORT $cleanSym", "Entered $${settings.positionSizeUsd.toInt()} (${settings.leverage}x) SHORT @ $pStr | Dump: $${String.format(Locale.US, "%,.0f", sellVol)}")
+            scheduleUiUpdate(force = true)
         }
     }
 
@@ -693,7 +891,7 @@ class SentinelForegroundService : Service() {
             message = msg
         ))
         sendAlertNotification("✋ Position Closed: $cleanSym", msg)
-        onStateChangedListener?.invoke()
+        scheduleUiUpdate(force = true)
     }
 
     fun fetchKlines(symbol: String, interval: String = "1", callback: (List<CandleStick>) -> Unit) {
@@ -737,19 +935,19 @@ class SentinelForegroundService : Service() {
     fun updateSettings(newSettings: TradingSettings) {
         settings = newSettings
         SettingsManager.saveSettings(this, newSettings)
-        onStateChangedListener?.invoke()
+        scheduleUiUpdate(force = true)
     }
 
     fun resetPaperStats() {
         paperStats.reset(settings.startingBalance)
         tradeStories.clear()
-        onStateChangedListener?.invoke()
+        scheduleUiUpdate(force = true)
     }
 
     private fun addAlert(alert: AlertItem) {
         alertsList.add(0, alert)
         if (alertsList.size > 50) alertsList.removeAt(alertsList.size - 1)
-        onStateChangedListener?.invoke()
+        scheduleUiUpdate()
     }
 
     private fun updateServiceNotification(text: String) {

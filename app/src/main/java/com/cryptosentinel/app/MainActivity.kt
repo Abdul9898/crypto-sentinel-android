@@ -10,7 +10,9 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.EditText
@@ -42,6 +44,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var gainerAdapter: GainerAdapter
     private lateinit var storyAdapter: TradeStoryAdapter
 
+    // Smooth UI debouncer to prevent main thread choke
+    private var lastUiRender = 0L
+    private val renderHandler = Handler(Looper.getMainLooper())
+    private val renderRunnable = Runnable {
+        updateUiFromService()
+    }
+
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as SentinelForegroundService.LocalBinder
@@ -49,8 +58,10 @@ class MainActivity : AppCompatActivity() {
             isBound = true
 
             sentinelService?.onStateChangedListener = {
-                runOnUiThread {
-                    updateUiFromService()
+                val now = System.currentTimeMillis()
+                if (now - lastUiRender >= 350L) {
+                    lastUiRender = now
+                    renderHandler.post(renderRunnable)
                 }
             }
             updateUiFromService()
@@ -129,6 +140,19 @@ class MainActivity : AppCompatActivity() {
         // Open Settings Dialog
         binding.btnOpenSettings.setOnClickListener {
             showSettingsDialog()
+        }
+
+        // 1-Tap Radar Execution Buttons
+        binding.btnRadarLong.setOnClickListener {
+            val s = sentinelService ?: return@setOnClickListener
+            s.executeRadarTrade("LONG")
+            Toast.makeText(this, "⚡ 1-Tap LONG on ${s.depthRadarState.symbol}!", Toast.LENGTH_SHORT).show()
+        }
+
+        binding.btnRadarShort.setOnClickListener {
+            val s = sentinelService ?: return@setOnClickListener
+            s.executeRadarTrade("SHORT")
+            Toast.makeText(this, "⚡ 1-Tap SHORT on ${s.depthRadarState.symbol}!", Toast.LENGTH_SHORT).show()
         }
 
         // Service Toggle Switch
@@ -288,6 +312,10 @@ class MainActivity : AppCompatActivity() {
             val radar = s.depthRadarState
             binding.tvRadarSymbol.text = "🎯 RADAR: ${radar.symbol}"
             binding.tvRadarStatus.text = radar.status
+
+            // Update 1-tap buttons text with radar symbol
+            binding.btnRadarLong.text = "🟢 LONG ${radar.symbol}"
+            binding.btnRadarShort.text = "🔴 SHORT ${radar.symbol}"
 
             val bidRatio = Math.max(5.0, Math.min(95.0, radar.bidRatioPct))
             val askRatio = 100.0 - bidRatio
