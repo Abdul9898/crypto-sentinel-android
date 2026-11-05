@@ -65,14 +65,44 @@
                 android:text="Win Rate: 0.0% (0W / 0L) | Open Positions: 0"
                 android:textColor="@color/text_dim"
                 android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tvActivePositions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:background="#151A22"
+                android:padding="6dp"
+                android:text="Waiting for whale clusters (&gt; $250k) to auto-trade..."
+                android:textColor="@color/primary_cyan"
+                android:textSize="11sp" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
+
+    <!-- Top Gainers Header -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="4dp"
+        android:text="🔥 TOP BREAKOUT GAINERS (LIVE BYBIT SCANNER)"
+        android:textColor="@color/text_dim"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
+    <!-- Top Gainers Horizontal List -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvGainers"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipToPadding="false"
+        android:orientation="horizontal" />
 
     <!-- Coin Watchlist Header -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="8dp"
         android:layout_marginBottom="4dp"
         android:text="WATCHLIST (ORDER FLOW &amp; CVD)"
         android:textColor="@color/text_dim"
@@ -83,7 +113,7 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvCoins"
         android:layout_width="match_parent"
-        android:layout_height="220dp"
+        android:layout_height="160dp"
         android:clipToPadding="false"
         android:scrollbars="vertical" />
 

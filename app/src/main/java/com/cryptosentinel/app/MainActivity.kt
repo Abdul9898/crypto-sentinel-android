@@ -23,9 +23,11 @@ class MainActivity : AppCompatActivity() {
 
     private val coinsList = mutableListOf<CoinState>()
     private val alertsList = mutableListOf<AlertItem>()
+    private val gainersList = mutableListOf<GainerItem>()
 
     private lateinit var coinAdapter: CoinAdapter
     private lateinit var alertAdapter: AlertAdapter
+    private lateinit var gainerAdapter: GainerAdapter
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
@@ -53,6 +55,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         requestNotificationPermission()
+
+        // Setup Top Gainers Horizontal List
+        gainerAdapter = GainerAdapter(gainersList)
+        binding.rvGainers.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        binding.rvGainers.adapter = gainerAdapter
 
         // Setup Coins List
         coinAdapter = CoinAdapter(coinsList)
@@ -98,6 +105,11 @@ class MainActivity : AppCompatActivity() {
     private fun updateUiFromService() {
         val s = sentinelService ?: return
 
+        // Update top gainers
+        gainersList.clear()
+        gainersList.addAll(s.topGainers)
+        gainerAdapter.notifyDataSetChanged()
+
         // Update coins
         coinsList.clear()
         coinsList.addAll(s.trackedCoins.values.sortedByDescending { Math.abs(it.cvd5m) })
@@ -113,6 +125,21 @@ class MainActivity : AppCompatActivity() {
         val pnlSign = if (stats.pnlUsd >= 0) "+" else ""
         binding.tvPaperPnl.text = String.format("💼 PAPER PnL: %s$%,.2f (%+.1f%%)", pnlSign, stats.pnlUsd, stats.pnlPct)
         binding.tvPaperWinRate.text = String.format("Win Rate: %.1f%% (%dW / %dL) | Open Positions: %d", stats.winRate, stats.wins, stats.losses, stats.openCount)
+
+        if (stats.openPositions.isNotEmpty()) {
+            val openStr = stats.openPositions.joinToString("\n") { pos ->
+                val sym = pos.symbol.replace("1000", "").replace("USDT", "")
+                val curPrice = s.trackedCoins[pos.symbol]?.price ?: pos.entryPrice
+                val diffPct = if (pos.side == "LONG") ((curPrice - pos.entryPrice) / pos.entryPrice) * 100
+                              else ((pos.entryPrice - curPrice) / pos.entryPrice) * 100
+                val pnlEst = (diffPct / 100.0) * pos.sizeUsd
+                val sideIcon = if (pos.side == "LONG") "🟢" else "🔴"
+                String.format("%s [%s %s] Entry: $%,.2f -> Now: $%,.2f (%+.2f%% / %+$%,.2f)", sideIcon, pos.side, sym, pos.entryPrice, curPrice, diffPct, pnlEst)
+            }
+            binding.tvActivePositions.text = openStr
+        } else {
+            binding.tvActivePositions.text = "Waiting for whale clusters (> $250k) to auto-trade..."
+        }
     }
 
     private fun requestNotificationPermission() {

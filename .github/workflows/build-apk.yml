@@ -46,12 +46,17 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v1.0.0
-          name: Crypto Sentinel Android v1.0.0
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.1' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.0.1' }}
           body: |
-            ## ⚡ Crypto Sentinel for Android
-            Installable standalone APK for Android with 24/7 background foreground service and real-time leading crypto signals.
+            ## ⚡ Crypto Sentinel Android v1.0.1
             
+            ### 🚀 What's New in v1.0.1:
+            - 🤖 **Whale Cluster Auto-Trading**: Automatically opens simulated paper trades (Long/Short) when $250k+ whale volume clusters hit the tape, tracking TP (+1.5%) and SL (-0.8%) automatically.
+            - 🔥 **Live Bybit Breakout & Top Gainers Scanner**: Scans all Bybit Linear perpetuals in background every 15s to detect and display explosive runners (+10% to +40% gainers like UAI, AIO, etc.).
+            - 💼 **Active Positions in Scorecard**: Displays real-time open positions, entry prices, and floating PnL on the main dashboard.
+            - 🔔 **Instant Sound & Vibration Alerts**: Alerts on whale cluster executions and breakout spikes.
+
             ### 📥 Download
             Download `CryptoSentinel.apk` below and tap to install on your phone.
           files: output/CryptoSentinel.apk

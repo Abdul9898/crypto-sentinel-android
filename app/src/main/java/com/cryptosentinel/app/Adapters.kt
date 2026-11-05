@@ -73,3 +73,36 @@ class AlertAdapter(private val alerts: List<AlertItem>) : RecyclerView.Adapter<A
 
     override fun getItemCount(): Int = alerts.size
 }
+
+class GainerAdapter(private val gainers: List<GainerItem>) : RecyclerView.Adapter<GainerAdapter.GainerViewHolder>() {
+
+    class GainerViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val tvSymbol: TextView = view.findViewById(R.id.tvGainerSymbol)
+        val tvPrice: TextView = view.findViewById(R.id.tvGainerPrice)
+        val tvChange: TextView = view.findViewById(R.id.tvGainerChange)
+        val tvVol: TextView = view.findViewById(R.id.tvGainerVol)
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GainerViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_gainer, parent, false)
+        return GainerViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: GainerViewHolder, position: Int) {
+        val gainer = gainers[position]
+        holder.tvSymbol.text = gainer.symbol
+        holder.tvPrice.text = if (gainer.price >= 100) String.format("$%,.1f", gainer.price)
+        else if (gainer.price >= 1) String.format("$%,.2f", gainer.price)
+        else String.format("$%,.4f", gainer.price)
+
+        val sign = if (gainer.change24hPct >= 0) "+" else ""
+        holder.tvChange.text = String.format("%s%.1f%%", sign, gainer.change24hPct)
+        holder.tvChange.setTextColor(if (gainer.change24hPct >= 0) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
+
+        val volFormatted = if (gainer.turnoverUsd >= 1_000_000) String.format("Vol: $%.1fM", gainer.turnoverUsd / 1_000_000)
+        else String.format("Vol: $%.0fK", gainer.turnoverUsd / 1_000)
+        holder.tvVol.text = volFormatted
+    }
+
+    override fun getItemCount(): Int = gainers.size
+}

@@ -26,7 +26,11 @@ class SentinelForegroundService : Service() {
 
     val trackedCoins = ConcurrentHashMap<String, CoinState>()
     val alertsList = Collections.synchronizedList(mutableListOf<AlertItem>())
+    val topGainers = Collections.synchronizedList(mutableListOf<GainerItem>())
     val paperStats = PaperStats()
+
+    private val recentWhaleTrades = Collections.synchronizedList(mutableListOf<WhaleRecord>())
+    private val alertedGainers = ConcurrentHashMap<String, Long>()
 
     var onStateChangedListener: (() -> Unit)? = null
 
@@ -39,6 +43,14 @@ class SentinelForegroundService : Service() {
     private val pairs = listOf(
         "BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT",
         "XRPUSDT", "SUIUSDT", "1000PEPEUSDT", "NEARUSDT"
+    )
+
+    data class WhaleRecord(
+        val timestamp: Long,
+        val symbol: String,
+        val isBuy: Boolean,
+        val usdVal: Double,
+        val price: Double
     )
 
     inner class LocalBinder : Binder() {
@@ -57,6 +69,7 @@ class SentinelForegroundService : Service() {
         }
 
         connectWebSocket()
+        startGainersScanner()
     }
 
     private fun createNotificationChannels() {
@@ -159,6 +172,80 @@ class SentinelForegroundService : Service() {
         })
     }
 
+    private fun startGainersScanner() {
+        serviceScope.launch {
+            while (isActive) {
+                try {
+                    fetchTopGainers()
+                } catch (_: Exception) {}
+                delay(15_000)
+            }
+        }
+    }
+
+    private fun fetchTopGainers() {
+        val request = Request.Builder()
+            .url("https://api.bybit.com/v5/market/tickers?category=linear")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return
+            val bodyStr = response.body?.string() ?: return
+            val root = gson.fromJson(bodyStr, JsonObject::class.java) ?: return
+            val result = root.getAsJsonObject("result") ?: return
+            val list = result.getAsJsonArray("list") ?: return
+
+            val parsed = mutableListOf<GainerItem>()
+            for (item in list) {
+                val obj = item.asJsonObject
+                val sym = obj.get("symbol")?.asString ?: continue
+                if (!sym.endsWith("USDT")) continue
+
+                val turnover = obj.get("turnover24h")?.asString?.toDoubleOrNull() ?: 0.0
+                if (turnover < 500_000.0) continue // Skip illiquid pairs
+
+                val pct = (obj.get("price24hPcnt")?.asString?.toDoubleOrNull() ?: 0.0) * 100.0
+                val price = obj.get("lastPrice")?.asString?.toDoubleOrNull() ?: 0.0
+                val cleanSym = sym.replace("1000", "").replace("USDT", "")
+
+                parsed.add(GainerItem(cleanSym, price, pct, turnover))
+            }
+
+            parsed.sortByDescending { it.change24hPct }
+            val top8 = parsed.take(8)
+
+            synchronized(topGainers) {
+                topGainers.clear()
+                topGainers.addAll(top8)
+            }
+
+            // Check for breakout surge alerts (>= +18% 24h change with high volume)
+            val now = System.currentTimeMillis()
+            for (g in top8) {
+                if (g.change24hPct >= 18.0) {
+                    val lastAlert = alertedGainers[g.symbol] ?: 0L
+                    if (now - lastAlert > 20 * 60 * 1000) { // 20 min cooldown per symbol
+                        alertedGainers[g.symbol] = now
+                        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
+                        val volStr = if (g.turnoverUsd >= 1_000_000) String.format("$%.1fM", g.turnoverUsd / 1_000_000)
+                        else String.format("$%.0fK", g.turnoverUsd / 1_000)
+                        val alert = AlertItem(
+                            timeStr = timeStr,
+                            symbol = g.symbol,
+                            type = "BREAKOUT",
+                            conviction = "HIGH",
+                            message = "🚀 TOP BREAKOUT: ${g.symbol} +${String.format("%.1f", g.change24hPct)}% (Vol: $volStr) @ $${String.format("%.4f", g.price)}"
+                        )
+                        addAlert(alert)
+                        sendAlertNotification("🚀 Breakout: ${g.symbol} +${String.format("%.1f", g.change24hPct)}%", "Surging on Bybit with $volStr volume @ $${String.format("%.4f", g.price)}")
+                    }
+                }
+            }
+
+            onStateChangedListener?.invoke()
+        }
+    }
+
     private fun handleMessage(jsonText: String) {
         try {
             val root = gson.fromJson(jsonText, JsonObject::class.java) ?: return
@@ -172,6 +259,7 @@ class SentinelForegroundService : Service() {
 
                 if (obj.has("lastPrice")) {
                     coin.price = obj.get("lastPrice").asDouble
+                    checkOpenPositions(sym, coin.price)
                 }
                 onStateChangedListener?.invoke()
             } else if (topic.startsWith("publicTrade.")) {
@@ -179,6 +267,7 @@ class SentinelForegroundService : Service() {
                 val coin = trackedCoins[sym] ?: return
                 val arr = data.asJsonArray
 
+                val now = System.currentTimeMillis()
                 for (item in arr) {
                     val trade = item.asJsonObject
                     val p = trade.get("p").asDouble
@@ -191,27 +280,182 @@ class SentinelForegroundService : Service() {
                     val deltaUsd = if (isBuy) usdVal else -usdVal
                     coin.cvd5m += deltaUsd
 
-                    // Whale order check
+                    // Check active positions on every trade execution
+                    checkOpenPositions(sym, p)
+
+                    // Whale order check (> $100k)
                     if (usdVal >= 100_000) {
-                        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+                        recentWhaleTrades.add(WhaleRecord(now, sym, isBuy, usdVal, p))
+                        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
                         val sideIcon = if (isBuy) "🟢 BUY" else "🔴 SELL"
+                        val cleanSym = sym.replace("1000", "").replace("USDT", "")
                         val msg = "$sideIcon Whale: $${String.format("%,.0f", usdVal)} @ $${String.format("%,.2f", p)}"
                         val alert = AlertItem(
                             timeStr = timeStr,
-                            symbol = sym.replace("1000", "").replace("USDT", ""),
+                            symbol = cleanSym,
                             type = "WHALE_TRADE",
-                            conviction = "HIGH",
+                            conviction = if (usdVal >= 250_000) "HIGH" else "MEDIUM",
                             message = msg
                         )
                         addAlert(alert)
-                        if (usdVal >= 250_000) {
-                            sendAlertNotification("🐋 Whale Order ($sym)", msg)
+                        if (usdVal >= 300_000) {
+                            sendAlertNotification("🐋 Whale Order ($cleanSym)", msg)
                         }
+
+                        // Evaluate Whale Cluster Auto-Trading
+                        evaluateWhaleCluster(sym, p, now, timeStr)
                     }
                 }
                 onStateChangedListener?.invoke()
             }
         } catch (_: Exception) {}
+    }
+
+    private fun evaluateWhaleCluster(sym: String, currentPrice: Double, now: Long, timeStr: String) {
+        // 1. Clean up trades older than 6 seconds
+        synchronized(recentWhaleTrades) {
+            val cutoff = now - 6000
+            recentWhaleTrades.removeAll { it.timestamp < cutoff }
+        }
+
+        // 2. Sum recent 6s whale volume for this coin
+        var buyVol = 0.0
+        var sellVol = 0.0
+        synchronized(recentWhaleTrades) {
+            for (w in recentWhaleTrades) {
+                if (w.symbol == sym) {
+                    if (w.isBuy) buyVol += w.usdVal else sellVol += w.usdVal
+                }
+            }
+        }
+
+        val cleanSym = sym.replace("1000", "").replace("USDT", "")
+
+        // Avoid opening multiple positions on same coin
+        val hasOpenPos = synchronized(paperStats.openPositions) {
+            paperStats.openPositions.any { it.symbol == sym }
+        }
+        if (hasOpenPos) return
+
+        val clusterThreshold = 250_000.0
+
+        if (buyVol >= clusterThreshold && buyVol > sellVol * 1.5) {
+            // Auto ENTER LONG
+            val entry = currentPrice
+            val tp = entry * 1.015 // +1.5%
+            val sl = entry * 0.992 // -0.8%
+            val pos = PaperPosition(
+                symbol = sym,
+                side = "LONG",
+                entryPrice = entry,
+                sizeUsd = 1000.0,
+                tpPrice = tp,
+                slPrice = sl,
+                openTimeStr = timeStr,
+                triggerReason = "Whale Buy Cluster: $${String.format("%,.0f", buyVol)}"
+            )
+            synchronized(paperStats.openPositions) {
+                paperStats.openPositions.add(pos)
+            }
+            val alert = AlertItem(
+                timeStr = timeStr,
+                symbol = cleanSym,
+                type = "AUTO_TRADE",
+                conviction = "HIGH",
+                message = "🤖 AUTO LONG $cleanSym @ $${String.format("%,.2f", entry)} | TP: $${String.format("%,.2f", tp)} (+1.5%) | SL: $${String.format("%,.2f", sl)} (-0.8%) [Whale: $${String.format("%,.0f", buyVol)}]"
+            )
+            addAlert(alert)
+            sendAlertNotification("🤖 Auto-Trade Entry: LONG $cleanSym", "Entered $1,000 LONG @ $${String.format("%,.2f", entry)} | Cluster: $${String.format("%,.0f", buyVol)}")
+        } else if (sellVol >= clusterThreshold && sellVol > buyVol * 1.5) {
+            // Auto ENTER SHORT
+            val entry = currentPrice
+            val tp = entry * 0.985 // -1.5%
+            val sl = entry * 1.008 // +0.8%
+            val pos = PaperPosition(
+                symbol = sym,
+                side = "SHORT",
+                entryPrice = entry,
+                sizeUsd = 1000.0,
+                tpPrice = tp,
+                slPrice = sl,
+                openTimeStr = timeStr,
+                triggerReason = "Whale Sell Dump: $${String.format("%,.0f", sellVol)}"
+            )
+            synchronized(paperStats.openPositions) {
+                paperStats.openPositions.add(pos)
+            }
+            val alert = AlertItem(
+                timeStr = timeStr,
+                symbol = cleanSym,
+                type = "AUTO_TRADE",
+                conviction = "HIGH",
+                message = "🤖 AUTO SHORT $cleanSym @ $${String.format("%,.2f", entry)} | TP: $${String.format("%,.2f", tp)} (-1.5%) | SL: $${String.format("%,.2f", sl)} (+0.8%) [Whale: $${String.format("%,.0f", sellVol)}]"
+            )
+            addAlert(alert)
+            sendAlertNotification("🤖 Auto-Trade Entry: SHORT $cleanSym", "Entered $1,000 SHORT @ $${String.format("%,.2f", entry)} | Dump: $${String.format("%,.0f", sellVol)}")
+        }
+    }
+
+    private fun checkOpenPositions(sym: String, currentPrice: Double) {
+        if (currentPrice <= 0) return
+        val toClose = mutableListOf<Pair<PaperPosition, Boolean>>()
+
+        synchronized(paperStats.openPositions) {
+            val it = paperStats.openPositions.iterator()
+            while (it.hasNext()) {
+                val pos = it.next()
+                if (pos.symbol == sym) {
+                    if (pos.side == "LONG") {
+                        if (currentPrice >= pos.tpPrice) {
+                            toClose.add(Pair(pos, true))
+                            it.remove()
+                        } else if (currentPrice <= pos.slPrice) {
+                            toClose.add(Pair(pos, false))
+                            it.remove()
+                        }
+                    } else if (pos.side == "SHORT") {
+                        if (currentPrice <= pos.tpPrice) {
+                            toClose.add(Pair(pos, true))
+                            it.remove()
+                        } else if (currentPrice >= pos.slPrice) {
+                            toClose.add(Pair(pos, false))
+                            it.remove()
+                        }
+                    }
+                }
+            }
+        }
+
+        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        val cleanSym = sym.replace("1000", "").replace("USDT", "")
+
+        for ((pos, isWin) in toClose) {
+            val pnlUsd = if (isWin) pos.sizeUsd * 0.015 else -pos.sizeUsd * 0.008
+            paperStats.balance += pnlUsd
+            if (isWin) {
+                paperStats.wins++
+                val msg = "🏆 [WIN +1.5%] Closed ${pos.side} $cleanSym @ $${String.format("%,.2f", currentPrice)} (+$$15.00)"
+                addAlert(AlertItem(
+                    timeStr = timeStr,
+                    symbol = cleanSym,
+                    type = "PAPER_WIN",
+                    conviction = "HIGH",
+                    message = msg
+                ))
+                sendAlertNotification("🏆 Trade Win! +$15.00 on $cleanSym", msg)
+            } else {
+                paperStats.losses++
+                val msg = "🛑 [SL -0.8%] Closed ${pos.side} $cleanSym @ $${String.format("%,.2f", currentPrice)} (-$$8.00)"
+                addAlert(AlertItem(
+                    timeStr = timeStr,
+                    symbol = cleanSym,
+                    type = "PAPER_LOSS",
+                    conviction = "MEDIUM",
+                    message = msg
+                ))
+                sendAlertNotification("🛑 Stop-Loss Hit (-$8.00) on $cleanSym", msg)
+            }
+        }
     }
 
     private fun addAlert(alert: AlertItem) {
