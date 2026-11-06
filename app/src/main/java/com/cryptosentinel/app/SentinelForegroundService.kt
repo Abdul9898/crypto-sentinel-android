@@ -30,11 +30,10 @@ class SentinelForegroundService : Service() {
     val tradeStories = Collections.synchronizedList(mutableListOf<TradeStory>())
     val paperStats = PaperStats()
     var settings = TradingSettings()
-    var depthRadarState = DepthRadarState()
+    var proEngineState = ProEngineState()
+    var focalSymbol = "BTCUSDT"
 
-    private val recentWhaleTrades = Collections.synchronizedList(mutableListOf<WhaleRecord>())
     private val alertedGainers = ConcurrentHashMap<String, Long>()
-    private val lastRadarTradeTime = ConcurrentHashMap<String, Long>()
 
     // Triple-Timeframe MACD(5,13,1) Engine
     val coinMacdStatus = ConcurrentHashMap<String, ConcurrentHashMap<String, MacdStatus>>()
@@ -59,19 +58,15 @@ class SentinelForegroundService : Service() {
         "XRPUSDT", "SUIUSDT", "1000PEPEUSDT", "NEARUSDT"
     )
 
-    data class WhaleRecord(
-        val timestamp: Long,
-        val symbol: String,
-        val isBuy: Boolean,
-        val usdVal: Double,
-        val price: Double
-    )
-
     inner class LocalBinder : Binder() {
         fun getService(): SentinelForegroundService = this@SentinelForegroundService
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -80,7 +75,21 @@ class SentinelForegroundService : Service() {
 
         // Load persisted settings
         settings = SettingsManager.loadSettings(this)
-        paperStats.reset(settings.startingBalance)
+
+        // Restore persisted paper positions and trade stories (survives app close & reboot)
+        val (savedStats, savedStories) = StateManager.loadState(this, settings.startingBalance)
+        paperStats.initialCapital = savedStats.initialCapital
+        paperStats.balance = savedStats.balance
+        paperStats.wins = savedStats.wins
+        paperStats.losses = savedStats.losses
+        synchronized(paperStats.openPositions) {
+            paperStats.openPositions.clear()
+            paperStats.openPositions.addAll(savedStats.openPositions)
+        }
+        synchronized(tradeStories) {
+            tradeStories.clear()
+            tradeStories.addAll(savedStories)
+        }
 
         for (p in pairs) {
             trackedCoins[p] = CoinState(symbol = p)
@@ -88,7 +97,6 @@ class SentinelForegroundService : Service() {
 
         connectWebSocket()
         startGainersScanner()
-        startDepthRadarScanner()
         startMacdMultiTimeframeScanner()
     }
 
@@ -215,16 +223,6 @@ class SentinelForegroundService : Service() {
         }
     }
 
-    private fun startDepthRadarScanner() {
-        serviceScope.launch {
-            while (isActive) {
-                try {
-                    fetchDepthRadar()
-                } catch (_: Exception) {}
-                delay(3500)
-            }
-        }
-    }
 
     private fun fetchTopGainers() {
         val request = Request.Builder()
@@ -303,113 +301,40 @@ class SentinelForegroundService : Service() {
         }
     }
 
-    private fun fetchDepthRadar() {
-        val candidateSyms = mutableListOf<String>()
+    fun setFocalSymbol(sym: String) {
+        val fullSym = if (sym.endsWith("USDT")) sym else "${sym}USDT"
+        focalSymbol = fullSym
+        updateProEngineState()
+        scheduleUiUpdate(force = true)
+    }
 
-        // 1. Prioritize Top Early Ignition Movers (fresh coins just beginning to move)
-        synchronized(topGainers) {
-            for (g in topGainers.take(5)) {
-                val s = if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
-                candidateSyms.add(s)
-            }
-        }
+    fun updateProEngineState() {
+        val fullSym = focalSymbol
+        val cleanSym = fullSym.replace("1000", "").replace("USDT", "")
+        val price = trackedCoins[fullSym]?.price ?: 0.0
+        val gainer = synchronized(topGainers) { topGainers.find { it.symbol == cleanSym } }
+        val change12h = gainer?.change12hPct ?: 0.0
+        val velocity1h = gainer?.velocity1hPct ?: 0.0
 
-        // 2. Also include any currently open positions to monitor active walls
-        val openPosSyms = synchronized(paperStats.openPositions) {
-            paperStats.openPositions.map { it.symbol }
-        }
-        for (sym in openPosSyms) {
-            if (!candidateSyms.contains(sym)) {
-                candidateSyms.add(sym)
-            }
-        }
+        val m5 = coinMacdStatus[fullSym]?.get("5")
+        val m15 = coinMacdStatus[fullSym]?.get("15")
+        val m60 = coinMacdStatus[fullSym]?.get("60")
 
-        if (candidateSyms.isEmpty()) candidateSyms.add("BTCUSDT")
+        val bias5 = if (m5 != null) (if (m5.isBullish) "BULLISH" else "BEARISH") else "SCANNING..."
+        val bias15 = if (m15 != null) (if (m15.isBullish) "BULLISH" else "BEARISH") else "SCANNING..."
+        val bias1h = if (m60 != null) (if (m60.isBullish) "BULLISH" else "BEARISH") else "SCANNING..."
 
-        var bestResult: DepthRadarState? = null
-        var bestImbalanceScore = -1.0
-
-        for (targetSym in candidateSyms) {
-            val fullSym = if (targetSym.endsWith("USDT")) targetSym else "${targetSym}USDT"
-            try {
-                val request = Request.Builder()
-                    .url("https://api.bybit.com/v5/market/orderbook?category=linear&symbol=$fullSym&limit=50")
-                    .build()
-
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) return@use
-                    val bodyStr = response.body?.string() ?: return@use
-                    val root = gson.fromJson(bodyStr, JsonObject::class.java) ?: return@use
-                    val result = root.getAsJsonObject("result") ?: return@use
-                    val bArray = result.getAsJsonArray("b") ?: return@use
-                    val aArray = result.getAsJsonArray("a") ?: return@use
-
-                    var bidVol = 0.0
-                    var askVol = 0.0
-                    var topBidP = 0.0
-                    var topBidUsd = 0.0
-                    var topAskP = 0.0
-                    var topAskUsd = 0.0
-
-                    for (item in bArray) {
-                        val arr = item.asJsonArray
-                        val p = arr[0].asString.toDoubleOrNull() ?: 0.0
-                        val q = arr[1].asString.toDoubleOrNull() ?: 0.0
-                        val usd = p * q
-                        bidVol += usd
-                        if (usd > topBidUsd) {
-                            topBidUsd = usd
-                            topBidP = p
-                        }
-                    }
-
-                    for (item in aArray) {
-                        val arr = item.asJsonArray
-                        val p = arr[0].asString.toDoubleOrNull() ?: 0.0
-                        val q = arr[1].asString.toDoubleOrNull() ?: 0.0
-                        val usd = p * q
-                        askVol += usd
-                        if (usd > topAskUsd) {
-                            topAskUsd = usd
-                            topAskP = p
-                        }
-                    }
-
-                    val total = bidVol + askVol
-                    val ratio = if (total > 0) (bidVol / total) * 100.0 else 50.0
-                    val cleanSym = fullSym.replace("1000", "").replace("USDT", "")
-
-                    val statusText = when {
-                        ratio >= 60.0 -> "🟢 HEAVY BUY WALLS (+${String.format(Locale.US, "%.0f", ratio - 50)}%)"
-                        ratio <= 40.0 -> "🔴 HEAVY SELL WALLS (-${String.format(Locale.US, "%.0f", 50 - ratio)}%)"
-                        else -> "⚖️ BALANCED L2 DEPTH"
-                    }
-
-                    val radarState = DepthRadarState(
-                        symbol = cleanSym,
-                        bidVolumeUsd = bidVol,
-                        askVolumeUsd = askVol,
-                        bidRatioPct = ratio,
-                        topBidWallPrice = topBidP,
-                        topBidWallUsd = topBidUsd,
-                        topAskWallPrice = topAskP,
-                        topAskWallUsd = topAskUsd,
-                        status = statusText
-                    )
-
-                    val imbalanceScore = Math.abs(ratio - 50.0)
-                    if (bestResult == null || imbalanceScore > bestImbalanceScore) {
-                        bestImbalanceScore = imbalanceScore
-                        bestResult = radarState
-                    }
-                }
-            } catch (_: Exception) {}
-        }
-
-        bestResult?.let {
-            depthRadarState = it
-            scheduleUiUpdate()
-        }
+        proEngineState = ProEngineState(
+            symbol = cleanSym,
+            currentPrice = price,
+            change12hPct = change12h,
+            velocity1hPct = velocity1h,
+            macd5mBias = bias5,
+            macd15mBias = bias15,
+            macd1hBias = bias1h,
+            lastSignalTime = proEngineState.lastSignalTime,
+            lastSignalText = proEngineState.lastSignalText
+        )
     }
 
     // =========================================================================
@@ -483,6 +408,8 @@ class SentinelForegroundService : Service() {
                             delay(120) // Politeness throttle between requests
                         }
                     }
+                    updateProEngineState()
+                    scheduleUiUpdate()
                 } catch (_: Exception) {}
                 delay(8000) // Scan cycle repeats every 8 seconds
             }
@@ -584,7 +511,14 @@ class SentinelForegroundService : Service() {
             synchronized(paperStats.openPositions) {
                 paperStats.openPositions.add(pos)
             }
+            StateManager.saveState(this, paperStats, tradeStories)
         }
+
+        // Update PRO Engine status
+        proEngineState = proEngineState.copy(
+            lastSignalTime = now,
+            lastSignalText = "🎯 $side on $tfLabel: $cleanSym @ $pStr"
+        )
 
         // Dedicated Signal Alert & Notification specifying timeframe
         val alert = AlertItem(
@@ -602,13 +536,13 @@ class SentinelForegroundService : Service() {
         scheduleUiUpdate(force = true)
     }
 
-    fun executeRadarTrade(side: String) {
-        val radar = depthRadarState
-        if (radar.symbol.isEmpty()) return
-        val fullSym = if (radar.symbol.endsWith("USDT")) radar.symbol else "${radar.symbol}USDT"
+    fun executeRadarTrade(side: String) = executeManualTrade(side)
+
+    fun executeManualTrade(side: String) {
+        val targetSym = proEngineState.symbol.ifEmpty { "BTCUSDT" }
+        val fullSym = if (targetSym.endsWith("USDT")) targetSym else "${targetSym}USDT"
         val tierConfig = TierCalculator.getConfig(fullSym)
-        val curPrice = trackedCoins[fullSym]?.price.takeIf { it != null && it > 0 }
-            ?: if (side == "LONG") radar.topBidWallPrice else radar.topAskWallPrice
+        val curPrice = trackedCoins[fullSym]?.price.takeIf { it != null && it > 0 } ?: proEngineState.currentPrice
         if (curPrice <= 0) return
 
         val isLong = side == "LONG"
@@ -627,21 +561,24 @@ class SentinelForegroundService : Service() {
             tpPct = tierConfig.tpPct,
             slPct = tierConfig.slPct,
             openTimeStr = timeStr,
-            triggerReason = "1-Tap Radar Trade (${radar.status})"
+            triggerReason = "1-Tap PRO Execution ($side)"
         )
         synchronized(paperStats.openPositions) {
             paperStats.openPositions.add(pos)
         }
+        StateManager.saveState(this, paperStats, tradeStories)
+
+        val cleanSym = fullSym.replace("1000", "").replace("USDT", "")
         val pStr = if (curPrice < 1.0) String.format(Locale.US, "$%.4f", curPrice) else String.format(Locale.US, "$%.2f", curPrice)
         val alert = AlertItem(
             timeStr = timeStr,
-            symbol = radar.symbol,
+            symbol = cleanSym,
             type = "MANUAL_TRADE",
             conviction = "HIGH",
-            message = "⚡ 1-TAP RADAR $side ${radar.symbol} @ $pStr | ${settings.leverage}x"
+            message = "⚡ 1-TAP PRO $side $cleanSym @ $pStr | ${settings.leverage}x"
         )
         addAlert(alert)
-        sendAlertNotification("⚡ Trade Entered: $side ${radar.symbol}", "Entered $side @ $pStr (${settings.leverage}x)")
+        sendAlertNotification("⚡ Trade Entered: $side $cleanSym", "Entered $side @ $pStr (${settings.leverage}x)")
         scheduleUiUpdate(force = true)
     }
 
@@ -666,9 +603,6 @@ class SentinelForegroundService : Service() {
                 val coin = trackedCoins[sym] ?: return
                 val arr = data.asJsonArray
 
-                val now = System.currentTimeMillis()
-                val tierConfig = TierCalculator.getConfig(sym)
-
                 for (item in arr) {
                     val trade = item.asJsonObject
                     val p = trade.get("p").asDouble
@@ -682,10 +616,6 @@ class SentinelForegroundService : Service() {
                     coin.cvd5m += deltaUsd
 
                     checkOpenPositions(sym, p)
-
-                    if (usdVal >= tierConfig.minWhaleOrder) {
-                        recentWhaleTrades.add(WhaleRecord(now, sym, isBuy, usdVal, p))
-                    }
                 }
                 scheduleUiUpdate()
             }
@@ -695,6 +625,7 @@ class SentinelForegroundService : Service() {
     private fun checkOpenPositions(sym: String, currentPrice: Double) {
         if (currentPrice <= 0) return
         val toClose = mutableListOf<Triple<PaperPosition, String, Double>>()
+        var stateChanged = false
 
         synchronized(paperStats.openPositions) {
             val it = paperStats.openPositions.iterator()
@@ -718,6 +649,7 @@ class SentinelForegroundService : Service() {
                             pos.isBreakEvenSet = true
                             pos.statusNote = "🛡️ BE LOCKED"
                             pos.slPrice = if (isLong) pos.entryPrice * 1.0006 else pos.entryPrice * 0.9994
+                            stateChanged = true
                             val cleanSym = sym.replace("1000", "").replace("USDT", "")
                             sendAlertNotification(
                                 "🛡️ Break-Even Locked ($cleanSym)",
@@ -732,10 +664,16 @@ class SentinelForegroundService : Service() {
                         pos.statusNote = "🚀 TRAILING SL"
                         if (isLong) {
                             val trailSl = pos.highestPrice * (1.0 - settings.trailingDistancePct / 100.0)
-                            if (trailSl > pos.slPrice) pos.slPrice = trailSl
+                            if (trailSl > pos.slPrice) {
+                                pos.slPrice = trailSl
+                                stateChanged = true
+                            }
                         } else {
                             val trailSl = pos.lowestPrice * (1.0 + settings.trailingDistancePct / 100.0)
-                            if (trailSl < pos.slPrice) pos.slPrice = trailSl
+                            if (trailSl < pos.slPrice) {
+                                pos.slPrice = trailSl
+                                stateChanged = true
+                            }
                         }
                     }
 
@@ -765,6 +703,10 @@ class SentinelForegroundService : Service() {
                     }
                 }
             }
+        }
+
+        if (stateChanged && toClose.isEmpty()) {
+            StateManager.saveState(this, paperStats, tradeStories)
         }
 
         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
@@ -818,6 +760,10 @@ class SentinelForegroundService : Service() {
             tradeStories.add(0, story)
             if (tradeStories.size > 40) tradeStories.removeAt(tradeStories.size - 1)
         }
+
+        if (toClose.isNotEmpty()) {
+            StateManager.saveState(this, paperStats, tradeStories)
+        }
     }
 
     fun closePositionManually(positionId: String) {
@@ -866,6 +812,7 @@ class SentinelForegroundService : Service() {
         )
         tradeStories.add(0, story)
         if (tradeStories.size > 40) tradeStories.removeAt(tradeStories.size - 1)
+        StateManager.saveState(this, paperStats, tradeStories)
 
         val msg = "✋ [MANUAL CLOSE] Closed ${pos.side} $cleanSym @ $pStr ($pnlStr)"
         addAlert(AlertItem(
@@ -926,6 +873,7 @@ class SentinelForegroundService : Service() {
     fun resetPaperStats() {
         paperStats.reset(settings.startingBalance)
         tradeStories.clear()
+        StateManager.saveState(this, paperStats, tradeStories)
         scheduleUiUpdate(force = true)
     }
 
@@ -944,6 +892,7 @@ class SentinelForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        StateManager.saveState(this, paperStats, tradeStories)
         webSocket?.close(1000, "Service stopped")
         serviceScope.cancel()
     }

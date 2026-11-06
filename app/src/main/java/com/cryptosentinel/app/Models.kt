@@ -169,3 +169,16 @@ data class TradingSettings(
     var trailingDistancePct: Double = 1.2
 )
 
+data class ProEngineState(
+    val symbol: String = "BTCUSDT",
+    val currentPrice: Double = 0.0,
+    val change12hPct: Double = 0.0,
+    val velocity1hPct: Double = 0.0,
+    val macd5mBias: String = "NEUTRAL",
+    val macd15mBias: String = "NEUTRAL",
+    val macd1hBias: String = "NEUTRAL",
+    val lastSignalTime: Long = 0L,
+    val lastSignalText: String = "Monitoring 3-TF MACD..."
+)
+
+

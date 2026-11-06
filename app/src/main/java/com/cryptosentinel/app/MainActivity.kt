@@ -8,11 +8,14 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.EditText
@@ -82,10 +85,12 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         requestNotificationPermission()
+        requestBatteryOptimizationExemption()
 
         // Setup Top Gainers Horizontal List (Tapping opens 3-Timeframe MACD Chart)
         gainerAdapter = GainerAdapter(gainersList) { gainer ->
             val s = sentinelService ?: return@GainerAdapter
+            s.setFocalSymbol(gainer.symbol)
             val fullSym = if (gainer.symbol.endsWith("USDT")) gainer.symbol else "${gainer.symbol}USDT"
             val tier = TierCalculator.getConfig(fullSym)
             val curP = gainer.price
@@ -171,6 +176,7 @@ class MainActivity : AppCompatActivity() {
         // Setup Coins List (Tapping opens 3-Timeframe MACD Chart)
         coinAdapter = CoinAdapter(coinsList) { coin ->
             val s = sentinelService ?: return@CoinAdapter
+            s.setFocalSymbol(coin.symbol)
             val tier = TierCalculator.getConfig(coin.symbol)
             val curP = coin.price
             ChartDialogHelper.showChart(
@@ -202,17 +208,41 @@ class MainActivity : AppCompatActivity() {
             showSettingsDialog()
         }
 
-        // 1-Tap Radar Execution Buttons
-        binding.btnRadarLong.setOnClickListener {
+        // PRO MACD Engine Buttons: 3-TF Chart and 1-Tap Execution
+        binding.btnProChart.setOnClickListener {
             val s = sentinelService ?: return@setOnClickListener
-            s.executeRadarTrade("LONG")
-            Toast.makeText(this, "⚡ 1-Tap LONG on ${s.depthRadarState.symbol}!", Toast.LENGTH_SHORT).show()
+            val targetSym = s.proEngineState.symbol.ifEmpty { "BTCUSDT" }
+            val fullSym = if (targetSym.endsWith("USDT")) targetSym else "${targetSym}USDT"
+            val tier = TierCalculator.getConfig(fullSym)
+            val curP = s.trackedCoins[fullSym]?.price.takeIf { it != null && it > 0 } ?: s.proEngineState.currentPrice
+            val isBullish = s.proEngineState.macd15mBias == "BULLISH"
+            ChartDialogHelper.showChart(
+                context = this,
+                symbol = targetSym,
+                side = if (isBullish) "LONG" else "SHORT",
+                entryPrice = curP,
+                tpPrice = curP * (1.0 + tier.tpPct / 100.0),
+                slPrice = curP * (1.0 - tier.slPct / 100.0),
+                tpPct = tier.tpPct,
+                slPct = tier.slPct,
+                positionId = null,
+                statusNote = "PRO MACD: ${s.proEngineState.macd15mBias}",
+                onClosePosition = null,
+                macdStatusProvider = { sym -> s.coinMacdStatus[sym] },
+                candlesProvider = { interval, cb -> s.fetchKlines(fullSym, interval, cb) }
+            )
         }
 
-        binding.btnRadarShort.setOnClickListener {
+        binding.btnProLong.setOnClickListener {
             val s = sentinelService ?: return@setOnClickListener
-            s.executeRadarTrade("SHORT")
-            Toast.makeText(this, "⚡ 1-Tap SHORT on ${s.depthRadarState.symbol}!", Toast.LENGTH_SHORT).show()
+            s.executeManualTrade("LONG")
+            Toast.makeText(this, "⚡ 1-Tap LONG on ${s.proEngineState.symbol}!", Toast.LENGTH_SHORT).show()
+        }
+
+        binding.btnProShort.setOnClickListener {
+            val s = sentinelService ?: return@setOnClickListener
+            s.executeManualTrade("SHORT")
+            Toast.makeText(this, "⚡ 1-Tap SHORT on ${s.proEngineState.symbol}!", Toast.LENGTH_SHORT).show()
         }
 
         // Service Toggle Switch
@@ -368,31 +398,24 @@ class MainActivity : AppCompatActivity() {
             binding.tvPaperPnl.text = String.format(Locale.US, "💼 PAPER PnL: %s$%,.2f (%+.1f%%)", pnlSign, stats.pnlUsd, stats.pnlPct)
             binding.tvPaperWinRate.text = String.format(Locale.US, "Win Rate: %.1f%% (%dW / %dL) | Capital: $%,.0f | Open: %d", stats.winRate, stats.wins, stats.losses, stats.balance, stats.openCount)
 
-            // 6. Update Whale Depth Wall Radar
-            val radar = s.depthRadarState
-            binding.tvRadarSymbol.text = "🎯 RADAR: ${radar.symbol}"
-            binding.tvRadarStatus.text = radar.status
+            // 6. Update PRO MACD Triple-Timeframe Engine Card
+            val pro = s.proEngineState
+            val symClean = pro.symbol.ifEmpty { "BTC" }
+            binding.tvProSymbol.text = "⚡ PRO MACD(5,13,1): $symClean"
 
-            // Update 1-tap buttons text with radar symbol
-            binding.btnRadarLong.text = "🟢 LONG ${radar.symbol}"
-            binding.btnRadarShort.text = "🔴 SHORT ${radar.symbol}"
+            val pStr = if (pro.currentPrice < 1.0) String.format(Locale.US, "$%.4f", pro.currentPrice) else String.format(Locale.US, "$%,.2f", pro.currentPrice)
+            val sign12h = if (pro.change12hPct >= 0) "+" else ""
+            binding.tvProPrice.text = String.format(Locale.US, "%s (%s%.2f%% 12h)", pStr, sign12h, pro.change12hPct)
 
-            val bidRatio = Math.max(5.0, Math.min(95.0, radar.bidRatioPct))
-            val askRatio = 100.0 - bidRatio
-            (binding.barBids.layoutParams as LinearLayout.LayoutParams).weight = bidRatio.toFloat()
-            (binding.barAsks.layoutParams as LinearLayout.LayoutParams).weight = askRatio.toFloat()
-            binding.barBids.requestLayout()
-            binding.barAsks.requestLayout()
-            binding.barBids.text = String.format(Locale.US, "%.0f%% Bids", bidRatio)
-            binding.barAsks.text = String.format(Locale.US, "%.0f%% Asks", askRatio)
+            val vSign = if (pro.velocity1hPct >= 0) "+" else ""
+            binding.tvProVelocity.text = String.format(Locale.US, "1h Velocity: %s%.2f%% | %s", vSign, pro.velocity1hPct, pro.lastSignalText)
 
-            val bidWallStr = if (radar.topBidWallUsd >= 1000) String.format(Locale.US, "$%.0fK", radar.topBidWallUsd / 1000) else "$0"
-            val askWallStr = if (radar.topAskWallUsd >= 1000) String.format(Locale.US, "$%.0fK", radar.topAskWallUsd / 1000) else "$0"
-            val pFormat = if (radar.topBidWallPrice < 1.0) "$%.4f" else "$%.2f"
-            val pAskFormat = if (radar.topAskWallPrice < 1.0) "$%.4f" else "$%.2f"
+            updateProBadge(binding.tvProBadge5m, "5M", pro.macd5mBias)
+            updateProBadge(binding.tvProBadge15m, "15M", pro.macd15mBias)
+            updateProBadge(binding.tvProBadge1h, "1H", pro.macd1hBias)
 
-            binding.tvBidWall.text = "🟢 Wall: $bidWallStr @ " + String.format(Locale.US, pFormat, radar.topBidWallPrice)
-            binding.tvAskWall.text = "🔴 Wall: $askWallStr @ " + String.format(Locale.US, pAskFormat, radar.topAskWallPrice)
+            binding.btnProLong.text = "🟢 LONG $symClean"
+            binding.btnProShort.text = "🔴 SHORT $symClean"
 
             // 7. Active Positions Display (Individual Cards)
             val currentPositions = synchronized(stats.openPositions) { stats.openPositions.toList() }
@@ -420,7 +443,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 binding.rvActivePositions.visibility = View.GONE
                 binding.tvPositionsEmpty.visibility = View.VISIBLE
-                binding.tvPositionsEmpty.text = "⚡ Adaptive 3-Tier Auto-Trading Active (${s.settings.leverage}x Leverage | Waiting for Whale Flow)..."
+                binding.tvPositionsEmpty.text = "⚡ Triple-TF MACD(5,13,1) Auto-Trading Active (${s.settings.leverage}x Leverage | 5m, 15m, 1h Zero-Cross Scan)..."
                 if (activePositionsList.isNotEmpty()) {
                     activePositionsList.clear()
                     activePositionAdapter.notifyDataSetChanged()
@@ -431,10 +454,44 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateProBadge(tv: TextView, tfLabel: String, bias: String) {
+        when (bias) {
+            "BULLISH" -> {
+                tv.setBackgroundResource(R.drawable.bg_pro_badge_green)
+                tv.setTextColor(ContextCompat.getColor(this, R.color.neon_green))
+                tv.text = "$tfLabel: BULLISH"
+            }
+            "BEARISH" -> {
+                tv.setBackgroundResource(R.drawable.bg_pro_badge_red)
+                tv.setTextColor(ContextCompat.getColor(this, R.color.neon_red))
+                tv.text = "$tfLabel: BEARISH"
+            }
+            else -> {
+                tv.setBackgroundResource(R.drawable.bg_pro_badge_neutral)
+                tv.setTextColor(ContextCompat.getColor(this, R.color.text_dim))
+                tv.text = "$tfLabel: SCANNING..."
+            }
+        }
+    }
+
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                } catch (_: Exception) {}
             }
         }
     }

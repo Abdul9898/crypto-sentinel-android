@@ -61,26 +61,28 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.6' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.6' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.7' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.7' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.1.6 (Triple-Timeframe MACD(5,13,1) Engine & Multi-Monitor)
+            ## ⚡ Crypto Sentinel Android v1.1.7 (24/7 Persistent State & PRO Color-Coded MACD Engine)
             
-            ### 🚀 What's New in v1.1.6:
-            - 🎯 **Triple-Timeframe MACD(5, 13, 1) Engine**: Completely stopped all unconfirmed flow signals and trading. Auto-trades and alerts are now driven purely by confirmed **`MACD(5, 13, 1)`** signals monitored concurrently across **`5m`**, **`15m`**, and **`1h`** charts!
-            - ⚡ **Direct Zero-Cross Trade Execution**:
-              - **LONG**: DIF crosses above 0 (Fast EMA 5 overtakes Slow EMA 13)
-              - **SHORT**: DIF crosses below 0 (Fast EMA 5 breaks below Slow EMA 13)
-              - Places direct paper trades immediately and sends high-priority notifications stating which timeframe fired!
-            - 📊 **3-Timeframe Live Monitor Bar**: The in-app Candlestick dialog displays a real-time 3-timeframe status bar (`5m: 🟢 BULL`, `15m: 🟢 BULL`, `1h: 🔴 BEAR`), letting you monitor all 3 timeframes side-by-side with 1-tap switching.
-            - 📈 **Bybit-Style MACD(5, 13, 1) Sub-Chart**: Features a Cyan DIF curve, centered dashed zero baseline, and colored histogram bars showing momentum expansion.
-            - 👆 **1-Tap Interactive Charts**: Tapping any coin or gainer in the app immediately opens its 3-timeframe MACD chart.
+            ### 🚀 What's New in v1.1.7:
+            - 🛡️ **24/7 State Persistence**: Trades, open positions, balance, win/loss stats, and trade stories are now persisted to disk (`StateManager`). Survives Android battery saving, background memory clearance, or closing the app for days. Everything resumes smoothly without resetting!
+            - ⚡ **Auto-Start On Phone Reboot**: Added `BootReceiver` (`RECEIVE_BOOT_COMPLETED`, `QUICKBOOT_POWERON`, and `MY_PACKAGE_REPLACED`) so the background monitoring service automatically launches whenever your phone turns on or updates.
+            - 🔋 **Battery Optimization Exemption**: Direct 1-tap exemption (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`) prevents Android Doze mode from sleeping the WebSocket or background scanners. No external VPS needed—your phone runs completely standalone!
+            - 🎯 **Removed Order Flow Radar**: Fully purged obsolete order flow whale alerts and depth wall radars.
+            - 🎨 **New PRO Color-Coded MACD(5,13,1) Engine Card**:
+              - Dynamic coin title, current price, and 12-hour change %.
+              - 1-hour momentum velocity & live signal status.
+              - **Triple Color-Coded Badges**: Real-time status for **5M**, **15M**, and **1H** (`🟢 BULLISH`, `🔴 BEARISH`, or `⚪ SCANNING`).
+              - **1-Tap 3-TF Chart**: Instant full candlestick and MACD(5,13,1) sub-chart.
+              - **1-Tap Direct Execution**: Quick LONG and SHORT buttons for the focal coin.
 
             ### 🛠️ Stable Signing:
-            - 🔑 **Dual Signature Schemes (v1 JAR + v2 APK Block)**: Permanent dual-signed release with `sentinel.keystore`. Installs seamlessly over previous versions with 1 tap.
+            - 🔑 **Dual Signature Schemes (v1 + v2)**: Permanent signed release with `sentinel.keystore`. Installs seamlessly over previous versions without signature conflicts.
 
             ### 📥 Download
-            Download `CryptoSentinel.apk` below and tap to update on your phone.
+            Download `CryptoSentinel.apk` below and install directly on your phone.
           files: output/CryptoSentinel.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
