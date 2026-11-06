@@ -220,14 +220,13 @@ class ActivePositionAdapter(
         val pFmt = if (pos.entryPrice < 1.0) "$%,.4f" else "$%,.2f"
         val curPFmt = if (item.currentPrice < 1.0) "$%,.4f" else "$%,.2f"
         val entryStr = String.format(java.util.Locale.US, pFmt, pos.entryPrice)
-        val curStr = String.format(java.util.Locale.US, curPFmt, item.currentPrice)
-        holder.tvPrices.text = "Entry: $entryStr -> Mark: $curStr"
+        holder.tvPrices.text = "$entryStr → $curStr"
 
         holder.tvStatusNote.text = "[${pos.statusNote}]"
 
         val tpStr = String.format(java.util.Locale.US, pFmt, pos.tpPrice)
         val slStr = String.format(java.util.Locale.US, pFmt, pos.slPrice)
-        holder.tvTpSl.text = "🎯 TP: $tpStr | 🛑 SL: $slStr"
+        holder.tvTpSl.text = "🎯$tpStr | 🛑$slStr"
 
         holder.itemView.setOnClickListener {
             onChartClick(pos)

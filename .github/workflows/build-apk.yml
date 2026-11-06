@@ -61,17 +61,17 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.8' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.8' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.9' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.9' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.1.8 (⚡ Quick $2.00 Take Profit Engine)
+            ## ⚡ Crypto Sentinel Android v1.1.9 (Spacious UI & Crypto Metrics Engine)
             
-            ### 🚀 What's New in v1.1.8:
-            - ⚡ **Quick $2.00 Take Profit Engine**: Any coin entering a trade will now lock in profit and exit as soon as it reaches $2.00 net USD profit (`pnlUsd >= $2.00`). Accumulate gains fast with high turnover without waiting for deep price swings!
-            - 🛡️ **Preserved Stop Loss Floor**: Stop loss thresholds (`slPct`), auto break-even (`isBreakEvenEnabled`), and trailing stop protection are completely preserved without alteration for robust downside protection.
-            - ⚙️ **Configurable Target Profit**: Added a dedicated `⚡ Quick Take Profit (Target USD Profit)` setting in Trading Settings (defaults to $2.0 USD).
-            - 📊 **Synchronized 3-TF Chart**: Chart preview lines for TP automatically calculate and display the exact target price corresponding to your $2 take-profit level across all timeframes (5m, 15m, 1h).
-            - 🏆 **Clear Victory Outcome**: Closed winning trades now log clearly as `🏆 [WIN (+$2 TP)]` in your alerts and trade stories.
+            ### 🚀 What's New in v1.1.9:
+            - 📱 **More Space & Full-Screen Scroll**: Wrapped the entire dashboard in a smooth `NestedScrollView` with compact card designs. Active positions, PRO cards, breakout gainers, and signal feeds now fit with ample breathing room without clutter or clipping on any screen size.
+            - 🚫 **Closed-Market Stock Token Blacklist**: Excluded traditional US stock/ETF tokens (`UVXY`, `MCD`, `ASTS`, etc.) that freeze outside Wall Street hours. Only authentic 24/7 liquid crypto pairs are scanned and traded.
+            - 💧 **24h Turnover Liquidity Gate ($5,000,000+ USD)**: Filtered out dead, illiquid micro-caps (like `ARIA`) with near-zero orderbook depth. Only tokens with millions in active hourly volume are traded.
+            - 📊 **Real-Time Crypto Metrics**: Live 24h Turnover (Volume in Billions/Millions), 24h High/Low range, and 1-hour Price Velocity are now dynamically calculated and displayed on the PRO card.
+            - ⚡ **Flatline Momentum Gate**: Prevents triggering auto-trades during dead 0.00% velocity range compressions—positions only enter when price momentum is genuinely active.
             
             ### 🛠️ Stable Signing:
             - 🔑 **Dual Signature Schemes (v1 + v2)**: Permanent signed release with `sentinel.keystore`. Installs seamlessly over previous versions without signature conflicts.

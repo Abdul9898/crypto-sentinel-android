@@ -35,7 +35,9 @@ data class GainerItem(
     val change12hPct: Double,
     val turnoverUsd: Double,
     val velocity1hPct: Double = 0.0,
-    val change24hPct: Double = change12hPct
+    val change24hPct: Double = change12hPct,
+    val high24h: Double = 0.0,
+    val low24h: Double = 0.0
 )
 
 data class CoinTierConfig(
@@ -175,6 +177,9 @@ data class ProEngineState(
     val currentPrice: Double = 0.0,
     val change12hPct: Double = 0.0,
     val velocity1hPct: Double = 0.0,
+    val turnover24h: Double = 0.0,
+    val high24h: Double = 0.0,
+    val low24h: Double = 0.0,
     val macd5mBias: String = "NEUTRAL",
     val macd15mBias: String = "NEUTRAL",
     val macd1hBias: String = "NEUTRAL",

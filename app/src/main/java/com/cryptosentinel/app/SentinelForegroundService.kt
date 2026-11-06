@@ -19,6 +19,17 @@ import java.util.concurrent.TimeUnit
 
 class SentinelForegroundService : Service() {
 
+    companion object {
+        val NON_CRYPTO_SYMBOLS = setOf(
+            "UVXY", "MCD", "ASTS", "NVDA", "TSLA", "AAPL", "MSFT", "AMZN", "GOOG", "GOOGL",
+            "META", "COIN", "PLTR", "MSTR", "BABA", "AMD", "NFLX", "ARM", "SMCI", "DIS",
+            "INTC", "NIO", "SOXX", "SOXS", "QQQ", "SPY", "IWM", "BA", "JPM", "XOM",
+            "V", "WMT", "MA", "PG", "HD", "CVX", "MRK", "ABBV", "PEP", "KO",
+            "COST", "AVGO", "ADBE", "TXN", "QCOM", "PYPL", "CRWD", "PANW", "SNOW", "HOOD",
+            "UBER", "ABNB", "DJT", "RDDT", "COHR", "MRVL", "DELL", "CRWV", "SOFI"
+        )
+    }
+
     private val binder = LocalBinder()
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var webSocket: WebSocket? = null
@@ -84,7 +95,12 @@ class SentinelForegroundService : Service() {
         paperStats.losses = savedStats.losses
         synchronized(paperStats.openPositions) {
             paperStats.openPositions.clear()
-            paperStats.openPositions.addAll(savedStats.openPositions)
+            // Automatically purge any stale non-crypto positions (e.g. UVXY, MCD, ASTS)
+            val cryptoOnlyPositions = savedStats.openPositions.filterNot { pos ->
+                val clean = pos.symbol.replace("1000", "").replace("USDT", "")
+                clean in NON_CRYPTO_SYMBOLS || pos.symbol.contains("STOCK")
+            }
+            paperStats.openPositions.addAll(cryptoOnlyPositions)
         }
         synchronized(tradeStories) {
             tradeStories.clear()
@@ -242,17 +258,21 @@ class SentinelForegroundService : Service() {
                 val sym = obj.get("symbol")?.asString ?: continue
                 if (!sym.endsWith("USDT")) continue
 
-                // Exclude traditional stock-named perpetuals
-                if (sym.contains("STOCK") || sym in listOf("SOXXUSDT", "SOXSUSDT")) continue
+                val cleanSym = sym.replace("1000", "").replace("USDT", "")
 
+                // Exclude traditional stock-named perpetuals and US ETFs
+                if (cleanSym in NON_CRYPTO_SYMBOLS || sym.contains("STOCK") || sym in listOf("SOXXUSDT", "SOXSUSDT")) continue
+
+                // 24h Turnover Liquidity Gate: require at least $5,000,000 USD to filter out dead/frozen micro-caps like ARIA
                 val turnover = obj.get("turnover24h")?.asString?.toDoubleOrNull() ?: 0.0
-                if (turnover < 300_000.0) continue
+                if (turnover < 5_000_000.0) continue
 
                 val p24h = (obj.get("price24hPcnt")?.asString?.toDoubleOrNull() ?: 0.0) * 100.0
                 val price = obj.get("lastPrice")?.asString?.toDoubleOrNull() ?: 0.0
                 val prev24h = obj.get("prevPrice24h")?.asString?.toDoubleOrNull() ?: price
                 val prev1h = obj.get("prevPrice1h")?.asString?.toDoubleOrNull() ?: price
-                val cleanSym = sym.replace("1000", "").replace("USDT", "")
+                val high24h = obj.get("highPrice24h")?.asString?.toDoubleOrNull() ?: price
+                val low24h = obj.get("lowPrice24h")?.asString?.toDoubleOrNull() ?: price
 
                 // 12-Hour baseline change % (Estimated 12h mark)
                 val prev12h = (prev24h + price) / 2.0
@@ -261,7 +281,7 @@ class SentinelForegroundService : Service() {
                 // Fresh 1-hour price velocity %
                 val velocity1h = if (prev1h > 0) ((price - prev1h) / prev1h) * 100.0 else 0.0
 
-                parsedAll.add(GainerItem(cleanSym, price, p12h, turnover, velocity1h, p24h))
+                parsedAll.add(GainerItem(cleanSym, price, p12h, turnover, velocity1h, p24h, high24h, low24h))
             }
 
             // Fresh Early Ignition Movers:
@@ -315,6 +335,9 @@ class SentinelForegroundService : Service() {
         val gainer = synchronized(topGainers) { topGainers.find { it.symbol == cleanSym } }
         val change12h = gainer?.change12hPct ?: 0.0
         val velocity1h = gainer?.velocity1hPct ?: 0.0
+        val turnover = gainer?.turnoverUsd ?: 0.0
+        val high24 = gainer?.high24h ?: 0.0
+        val low24 = gainer?.low24h ?: 0.0
 
         val m5 = coinMacdStatus[fullSym]?.get("5")
         val m15 = coinMacdStatus[fullSym]?.get("15")
@@ -329,6 +352,9 @@ class SentinelForegroundService : Service() {
             currentPrice = price,
             change12hPct = change12h,
             velocity1hPct = velocity1h,
+            turnover24h = turnover,
+            high24h = high24,
+            low24h = low24,
             macd5mBias = bias5,
             macd15mBias = bias15,
             macd1hBias = bias1h,
@@ -477,6 +503,18 @@ class SentinelForegroundService : Service() {
         lastMacdTradeTime[cooldownKey] = now
 
         val cleanSym = sym.replace("1000", "").replace("USDT", "")
+
+        // 1. Never trade closed-market stock tokens
+        if (cleanSym in NON_CRYPTO_SYMBOLS || sym.contains("STOCK")) return
+
+        // 2. Momentum & Volatility Gate: do not enter if coin is trapped in a 0.00% flatline dead zone
+        val gainer = synchronized(topGainers) { topGainers.find { it.symbol == cleanSym } }
+        if (gainer != null) {
+            if (Math.abs(gainer.velocity1hPct) < 0.15 && Math.abs(gainer.change12hPct) < 0.40) {
+                return
+            }
+        }
+
         val currentPrice = trackedCoins[sym]?.price.takeIf { it != null && it > 0 } ?: lastPrice
         if (currentPrice <= 0) return
 

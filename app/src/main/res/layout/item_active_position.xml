@@ -3,9 +3,9 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="6dp"
+    android:layout_marginTop="3dp"
     app:cardBackgroundColor="#111620"
-    app:cardCornerRadius="8dp"
+    app:cardCornerRadius="6dp"
     app:strokeColor="@color/card_border"
     app:strokeWidth="1dp">
 
@@ -13,9 +13,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="9dp">
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="5dp">
 
-        <!-- Line 1: Side Badge + Symbol + Live PnL -->
+        <!-- Line 1: Side Badge + Symbol + Status Note + Live PnL -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -27,22 +28,32 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@color/card_border"
-                android:paddingHorizontal="6dp"
-                android:paddingVertical="2dp"
-                android:text="🟢 LONG 10x"
+                android:paddingHorizontal="5dp"
+                android:paddingVertical="1dp"
+                android:text="🟢 LONG 5x"
                 android:textColor="@color/neon_green"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/tvPosSymbol"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
+                android:layout_marginStart="6dp"
                 android:text="ETHUSDT"
                 android:textColor="@color/text_white"
-                android:textSize="13sp"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvPosStatusNote"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:text="[ACTIVE]"
+                android:textColor="@color/gold_accent"
+                android:textSize="10sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -51,15 +62,15 @@
                 android:layout_height="wrap_content"
                 android:text="+$14.20 (+1.4%)"
                 android:textColor="@color/neon_green"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Line 2: Prices (Entry -> Mark) + Trailing/BE Status Note -->
+        <!-- Line 2: Prices, TP/SL & Action Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
+            android:layout_marginTop="3dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -68,36 +79,18 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Entry: $2,120.50 -> Mark: $2,145.00"
+                android:text="Entry: $2,120 -> Mark: $2,145"
                 android:textColor="@color/text_dim"
-                android:textSize="11sp" />
-
-            <TextView
-                android:id="@+id/tvPosStatusNote"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="[Trailing +1.0%]"
-                android:textColor="@color/gold_accent"
-                android:textSize="10sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-
-        <!-- Line 3: TP/SL levels & Action Buttons -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+                android:textSize="10sp" />
 
             <TextView
                 android:id="@+id/tvPosTpSl"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="🎯 TP: $2,180.00 | 🛑 SL: $2,100.00"
+                android:layout_marginEnd="6dp"
+                android:text="🎯 TP $2,180 | 🛑 SL $2,100"
                 android:textColor="@color/text_dim"
-                android:textSize="10sp" />
+                android:textSize="9sp" />
 
             <!-- Direct Close Button -->
             <TextView
@@ -107,11 +100,11 @@
                 android:background="#2E1822"
                 android:clickable="true"
                 android:focusable="true"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="4dp"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp"
                 android:text="❌ Close"
                 android:textColor="@color/neon_red"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 android:textStyle="bold" />
 
             <!-- Chart Button -->
@@ -119,15 +112,15 @@
                 android:id="@+id/btnPosChart"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="4dp"
                 android:background="#152636"
                 android:clickable="true"
                 android:focusable="true"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="4dp"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp"
                 android:text="📈 Chart"
                 android:textColor="@color/primary_cyan"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 android:textStyle="bold" />
         </LinearLayout>
 

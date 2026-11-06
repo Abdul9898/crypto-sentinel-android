@@ -5,14 +5,16 @@
     android:layout_height="match_parent"
     android:background="@color/bg_dark"
     android:orientation="vertical"
-    android:padding="12dp">
+    android:padding="6dp">
 
     <!-- Header & Background Service Toggle -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:paddingHorizontal="4dp"
+        android:paddingVertical="2dp">
 
         <TextView
             android:layout_width="0dp"
@@ -20,22 +22,22 @@
             android:layout_weight="1"
             android:text="⚡ CRYPTO SENTINEL"
             android:textColor="@color/primary_cyan"
-            android:textSize="18sp"
+            android:textSize="16sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/btnOpenSettings"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="12dp"
+            android:layout_marginEnd="10dp"
             android:background="@color/card_border"
             android:clickable="true"
             android:focusable="true"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="4dp"
+            android:paddingHorizontal="7dp"
+            android:paddingVertical="3dp"
             android:text="⚙️ Risk"
             android:textColor="@color/text_white"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:textStyle="bold" />
 
         <com.google.android.material.switchmaterial.SwitchMaterial
@@ -44,299 +46,316 @@
             android:layout_height="wrap_content"
             android:checked="true"
             android:text="24/7"
-            android:textColor="@color/text_white" />
+            android:textColor="@color/text_white"
+            android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- Paper Trading Scorecard Banner -->
-    <com.google.android.material.card.MaterialCardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        app:cardBackgroundColor="@color/card_bg"
-        app:cardCornerRadius="10dp"
-        app:strokeColor="@color/card_border"
-        app:strokeWidth="1dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="10dp">
-
-            <TextView
-                android:id="@+id/tvPaperPnl"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="💼 PAPER PnL: +$0.00 (+0.0%)"
-                android:textColor="@color/neon_green"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/tvPaperWinRate"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="Win Rate: 0.0% (0W / 0L) | Open Positions: 0"
-                android:textColor="@color/text_dim"
-                android:textSize="12sp" />
-
-            <!-- Empty state when no positions are open -->
-            <TextView
-                android:id="@+id/tvPositionsEmpty"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:background="#151A22"
-                android:padding="8dp"
-                android:text="⚡ Adaptive 3-Tier Auto-Trading Active (Waiting for Whale Flow)..."
-                android:textColor="@color/primary_cyan"
-                android:textSize="11sp" />
-
-            <!-- Active Positions List (One clickable card per coin) -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rvActivePositions"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:nestedScrollingEnabled="false"
-                android:visibility="gone" />
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
-
-    <!-- PRO MACD Triple-Timeframe Engine Card -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/cardProEngine"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        app:cardBackgroundColor="@color/card_bg"
-        app:cardCornerRadius="10dp"
-        app:strokeColor="@color/card_border"
-        app:strokeWidth="1dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="12dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/tvProSymbol"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="⚡ PRO MACD(5,13,1): BTCUSDT"
-                    android:textColor="@color/primary_cyan"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/tvProPrice"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="$0.00 (0.00% 12h)"
-                    android:textColor="@color/text_white"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/tvProVelocity"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="1h Velocity: 0.00% | 🚀 Monitoring 3-TF MACD..."
-                android:textColor="@color/text_dim"
-                android:textSize="11sp" />
-
-            <!-- Color-Coded 3-TF Badges -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/tvProBadge5m"
-                    android:layout_width="0dp"
-                    android:layout_height="32dp"
-                    android:layout_marginEnd="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_pro_badge_neutral"
-                    android:gravity="center"
-                    android:text="5M: NEUTRAL"
-                    android:textColor="@color/text_white"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/tvProBadge15m"
-                    android:layout_width="0dp"
-                    android:layout_height="32dp"
-                    android:layout_marginHorizontal="2dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_pro_badge_neutral"
-                    android:gravity="center"
-                    android:text="15M: NEUTRAL"
-                    android:textColor="@color/text_white"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/tvProBadge1h"
-                    android:layout_width="0dp"
-                    android:layout_height="32dp"
-                    android:layout_marginStart="4dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_pro_badge_neutral"
-                    android:gravity="center"
-                    android:text="1H: NEUTRAL"
-                    android:textColor="@color/text_white"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <!-- Action Buttons: 3-TF Chart Dialog & 1-Tap Execution -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnProChart"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="6dp"
-                    android:layout_weight="1"
-                    android:backgroundTint="#1F2937"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:padding="0dp"
-                    android:text="📊 3-TF CHART"
-                    android:textColor="@color/primary_cyan"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    app:strokeColor="@color/primary_cyan"
-                    app:strokeWidth="1dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnProLong"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="4dp"
-                    android:layout_weight="1"
-                    android:backgroundTint="@color/neon_green"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:padding="0dp"
-                    android:text="🟢 LONG"
-                    android:textColor="@color/bg_dark"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnProShort"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:backgroundTint="@color/neon_red"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:padding="0dp"
-                    android:text="🔴 SHORT"
-                    android:textColor="@color/text_white"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
-
-    <!-- Trade Stories Header -->
-    <TextView
-        android:id="@+id/tvStoriesHeader"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="4dp"
-        android:text="📖 TRADE STORY (RECENT EXITS - TAP FOR CHART)"
-        android:textColor="@color/text_dim"
-        android:textSize="11sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
-
-    <!-- Trade Stories List -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvStories"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:clipToPadding="false"
-        android:visibility="gone" />
-
-    <!-- Top Gainers Header -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="4dp"
-        android:text="⚡ FRESH BREAKOUT IGNITIONS (EARLY MOVERS)"
-        android:textColor="@color/primary_cyan"
-        android:textSize="11sp"
-        android:textStyle="bold" />
-
-    <!-- Top Gainers Horizontal List -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvGainers"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:clipToPadding="false"
-        android:orientation="horizontal" />
-
-    <!-- Coin Watchlist Header -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="4dp"
-        android:text="WATCHLIST (TAP FOR 3-TF MACD CHART)"
-        android:textColor="@color/text_dim"
-        android:textSize="11sp"
-        android:textStyle="bold" />
-
-    <!-- Coin List -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvCoins"
-        android:layout_width="match_parent"
-        android:layout_height="140dp"
-        android:clipToPadding="false"
-        android:scrollbars="vertical" />
-
-    <!-- Alerts Header -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="4dp"
-        android:text="🎯 ENGINE SIGNAL ALERTS &amp; EXECUTIONS"
-        android:textColor="@color/text_dim"
-        android:textSize="11sp"
-        android:textStyle="bold" />
-
-    <!-- Alerts Feed -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvAlerts"
+    <!-- Scrollable Main Body for Max Space -->
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:clipToPadding="false"
-        android:scrollbars="vertical" />
+        android:fillViewport="true"
+        android:scrollbars="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Paper Trading Scorecard Banner -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                app:cardBackgroundColor="@color/card_bg"
+                app:cardCornerRadius="8dp"
+                app:strokeColor="@color/card_border"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="8dp">
+
+                    <TextView
+                        android:id="@+id/tvPaperPnl"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="💼 PAPER PnL: +$0.00 (+0.0%)"
+                        android:textColor="@color/neon_green"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvPaperWinRate"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="Win Rate: 0.0% (0W / 0L) | Open Positions: 0"
+                        android:textColor="@color/text_dim"
+                        android:textSize="11sp" />
+
+                    <!-- Empty state when no positions are open -->
+                    <TextView
+                        android:id="@+id/tvPositionsEmpty"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:background="#151A22"
+                        android:padding="6dp"
+                        android:text="⚡ Auto-Trading Active (Scanning 5m, 15m, 1h MACD)..."
+                        android:textColor="@color/primary_cyan"
+                        android:textSize="10sp" />
+
+                    <!-- Active Positions List (Compact cards) -->
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rvActivePositions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:nestedScrollingEnabled="false"
+                        android:visibility="gone" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- PRO MACD Triple-Timeframe Engine Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardProEngine"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                app:cardBackgroundColor="@color/card_bg"
+                app:cardCornerRadius="8dp"
+                app:strokeColor="@color/card_border"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="8dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvProSymbol"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="⚡ PRO MACD(5,13,1): BTC"
+                            android:textColor="@color/primary_cyan"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvProPrice"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$0.00 (0.00% 12h)"
+                            android:textColor="@color/text_white"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvProVelocity"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="1h Vel: 0.00% | Vol: $0M | 🚀 Monitoring 3-TF MACD..."
+                        android:textColor="@color/text_dim"
+                        android:textSize="10sp" />
+
+                    <!-- Color-Coded 3-TF Badges -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvProBadge5m"
+                            android:layout_width="0dp"
+                            android:layout_height="26dp"
+                            android:layout_marginEnd="3dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_pro_badge_neutral"
+                            android:gravity="center"
+                            android:text="5M: NEUTRAL"
+                            android:textColor="@color/text_white"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvProBadge15m"
+                            android:layout_width="0dp"
+                            android:layout_height="26dp"
+                            android:layout_marginHorizontal="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_pro_badge_neutral"
+                            android:gravity="center"
+                            android:text="15M: NEUTRAL"
+                            android:textColor="@color/text_white"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvProBadge1h"
+                            android:layout_width="0dp"
+                            android:layout_height="26dp"
+                            android:layout_marginStart="3dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_pro_badge_neutral"
+                            android:gravity="center"
+                            android:text="1H: NEUTRAL"
+                            android:textColor="@color/text_white"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <!-- Action Buttons: 3-TF Chart Dialog & 1-Tap Execution -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="5dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnProChart"
+                            android:layout_width="0dp"
+                            android:layout_height="30dp"
+                            android:layout_marginEnd="4dp"
+                            android:layout_weight="1"
+                            android:backgroundTint="#1F2937"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:padding="0dp"
+                            android:text="📊 3-TF CHART"
+                            android:textColor="@color/primary_cyan"
+                            android:textSize="10sp"
+                            android:textStyle="bold"
+                            app:strokeColor="@color/primary_cyan"
+                            app:strokeWidth="1dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnProLong"
+                            android:layout_width="0dp"
+                            android:layout_height="30dp"
+                            android:layout_marginEnd="3dp"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/neon_green"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:padding="0dp"
+                            android:text="🟢 LONG"
+                            android:textColor="@color/bg_dark"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnProShort"
+                            android:layout_width="0dp"
+                            android:layout_height="30dp"
+                            android:layout_weight="1"
+                            android:backgroundTint="@color/neon_red"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:padding="0dp"
+                            android:text="🔴 SHORT"
+                            android:textColor="@color/text_white"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Trade Stories Header -->
+            <TextView
+                android:id="@+id/tvStoriesHeader"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:layout_marginBottom="2dp"
+                android:text="📖 TRADE STORY (RECENT EXITS - TAP FOR CHART)"
+                android:textColor="@color/text_dim"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <!-- Trade Stories List -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvStories"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:nestedScrollingEnabled="false"
+                android:visibility="gone" />
+
+            <!-- Top Gainers Header -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:layout_marginBottom="2dp"
+                android:text="⚡ FRESH BREAKOUT IGNITIONS (EARLY MOVERS)"
+                android:textColor="@color/primary_cyan"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <!-- Top Gainers Horizontal List -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvGainers"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:orientation="horizontal" />
+
+            <!-- Coin Watchlist Header -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:layout_marginBottom="2dp"
+                android:text="WATCHLIST (TAP FOR 3-TF MACD CHART)"
+                android:textColor="@color/text_dim"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <!-- Coin List -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvCoins"
+                android:layout_width="match_parent"
+                android:layout_height="100dp"
+                android:clipToPadding="false"
+                android:scrollbars="vertical" />
+
+            <!-- Alerts Header -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:layout_marginBottom="2dp"
+                android:text="🎯 ENGINE SIGNAL ALERTS &amp; EXECUTIONS"
+                android:textColor="@color/text_dim"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <!-- Alerts Feed -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvAlerts"
+                android:layout_width="match_parent"
+                android:layout_height="140dp"
+                android:clipToPadding="false"
+                android:scrollbars="vertical" />
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>

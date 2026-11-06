@@ -426,7 +426,15 @@ class MainActivity : AppCompatActivity() {
             binding.tvProPrice.text = String.format(Locale.US, "%s (%s%.2f%% 12h)", pStr, sign12h, pro.change12hPct)
 
             val vSign = if (pro.velocity1hPct >= 0) "+" else ""
-            binding.tvProVelocity.text = String.format(Locale.US, "1h Velocity: %s%.2f%% | %s", vSign, pro.velocity1hPct, pro.lastSignalText)
+            val volStr = if (pro.turnover24h >= 1_000_000_000) String.format(Locale.US, "$%.2fB", pro.turnover24h / 1_000_000_000)
+                         else if (pro.turnover24h >= 1_000_000) String.format(Locale.US, "$%.1fM", pro.turnover24h / 1_000_000)
+                         else "$0"
+            val rangeStr = if (pro.high24h > 0 && pro.low24h > 0) {
+                val hStr = if (pro.high24h < 1) String.format(Locale.US, "$%.4f", pro.high24h) else String.format(Locale.US, "$%,.0f", pro.high24h)
+                val lStr = if (pro.low24h < 1) String.format(Locale.US, "$%.4f", pro.low24h) else String.format(Locale.US, "$%,.0f", pro.low24h)
+                " | 24h: $lStr-$hStr"
+            } else ""
+            binding.tvProVelocity.text = String.format(Locale.US, "1h Vel: %s%.2f%% | Vol: %s%s | %s", vSign, pro.velocity1hPct, volStr, rangeStr, pro.lastSignalText)
 
             updateProBadge(binding.tvProBadge5m, "5M", pro.macd5mBias)
             updateProBadge(binding.tvProBadge15m, "15M", pro.macd15mBias)
