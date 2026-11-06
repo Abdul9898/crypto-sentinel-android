@@ -61,16 +61,21 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.4' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.4' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.5' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.5' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.1.4 (Early Breakout Ignition Engine & Clean Signals)
+            ## ⚡ Crypto Sentinel Android v1.1.5 (Strict CVD Direction & 12h Calculations)
             
-            ### 🚀 What's New in v1.1.4:
-            - ⚡ **Early Breakout Ignition Engine**: Detects newly awakening moves by measuring 1-hour price velocity against a calm 24h baseline (-8% to +15%). Completely eliminates chasing exhausted +50% pumps!
-            - 🎯 **Ignition-Focused Depth Radar**: The Whale Depth Wall Radar automatically prioritizes the freshest early movers, scanning their Level 2 order books for whale support walls ($\ge 60\%$ Bids).
-            - 🔕 **Clean Engine Signals (No Whale Spam)**: Removed raw whale order notification spam. The feed and phone alerts now exclusively deliver high-conviction **Early Ignition Signals** (`🔥 EARLY LONG / SHORT`), **Radar Signals**, and **Auto-Trades**.
-            - 📊 **1h Velocity Badges**: Early mover cards now prominently show `+X.X% 1h` ignition momentum and 24h baseline.
+            ### 🚀 What's New in v1.1.5:
+            - 🛡️ **Strict CVD Direction Filter**: Never enter into falling knives! Before ANY auto-trade or radar trade is opened:
+              - **LONG**: Requires aggressive buyers with positive CVD (`CVD > 0`) and rising price velocity (`1h >= -0.5%`). Long is FORBIDDEN if CVD is negative/dumping.
+              - **SHORT**: Requires aggressive sellers with negative CVD (`CVD < 0`) and falling price velocity (`1h <= 0.5%`). Short is FORBIDDEN if CVD is positive/rising.
+            - ⏱️ **12-Hour Momentum Calculations**: Switched from 24h baseline to 12h calculations for sharper, more reactive trend detection without waiting for old 24h lag.
+            - 📈 **CVD High/Low Upper & Lower Envelope Bands**: On the interactive Candlestick & CVD chart:
+              - Dashed green **CVD HIGH** upper envelope line.
+              - Dashed red **CVD LOW** lower envelope line.
+              - Dynamic `▲ CVD RISING` / `▼ CVD DROPPING` slope badge showing real-time CVD direction.
+            - 🎯 **Directional Early Ignition Signals**: Gainers are segregated into clean Long and Short ignition candidates with CVD confirmation before alerting.
 
             ### 🛠️ Stable Signing:
             - 🔑 **Dual Signature Schemes (v1 JAR + v2 APK Block)**: Permanent dual-signed release with `sentinel.keystore`. Installs seamlessly over previous versions with 1 tap.

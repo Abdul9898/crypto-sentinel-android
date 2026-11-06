@@ -101,12 +101,12 @@ class GainerAdapter(private val gainers: List<GainerItem>) : RecyclerView.Adapte
             holder.tvChange.text = String.format(java.util.Locale.US, "%s%.1f%% 1h", sign, vel)
             holder.tvChange.setTextColor(if (vel >= 0) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
 
-            val sign24 = if (gainer.change24hPct >= 0) "+" else ""
-            holder.tvVol.text = String.format(java.util.Locale.US, "24h %s%.0f%%", sign24, gainer.change24hPct)
+            val sign12 = if (gainer.change12hPct >= 0) "+" else ""
+            holder.tvVol.text = String.format(java.util.Locale.US, "12h %s%.0f%%", sign12, gainer.change12hPct)
         } else {
-            val sign = if (gainer.change24hPct >= 0) "+" else ""
-            holder.tvChange.text = String.format("%s%.1f%%", sign, gainer.change24hPct)
-            holder.tvChange.setTextColor(if (gainer.change24hPct >= 0) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
+            val sign = if (gainer.change12hPct >= 0) "+" else ""
+            holder.tvChange.text = String.format("%s%.1f%%", sign, gainer.change12hPct)
+            holder.tvChange.setTextColor(if (gainer.change12hPct >= 0) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
 
             val volFormatted = if (gainer.turnoverUsd >= 1_000_000) String.format("Vol: $%.1fM", gainer.turnoverUsd / 1_000_000)
             else String.format("Vol: $%.0fK", gainer.turnoverUsd / 1_000)

@@ -247,23 +247,34 @@ class SentinelForegroundService : Service() {
 
                 val p24h = (obj.get("price24hPcnt")?.asString?.toDoubleOrNull() ?: 0.0) * 100.0
                 val price = obj.get("lastPrice")?.asString?.toDoubleOrNull() ?: 0.0
+                val prev24h = obj.get("prevPrice24h")?.asString?.toDoubleOrNull() ?: price
                 val prev1h = obj.get("prevPrice1h")?.asString?.toDoubleOrNull() ?: price
                 val cleanSym = sym.replace("1000", "").replace("USDT", "")
+
+                // 12-Hour baseline change % (Estimated 12h mark)
+                val prev12h = (prev24h + price) / 2.0
+                val p12h = if (prev12h > 0) ((price - prev12h) / prev12h) * 100.0 else p24h * 0.5
 
                 // Fresh 1-hour price velocity %
                 val velocity1h = if (prev1h > 0) ((price - prev1h) / prev1h) * 100.0 else 0.0
 
-                parsedAll.add(GainerItem(cleanSym, price, p24h, turnover, velocity1h))
+                parsedAll.add(GainerItem(cleanSym, price, p12h, turnover, velocity1h, p24h))
             }
 
             // Fresh Early Ignition Movers:
-            // 24h change is calm (-8% to +15% -> has NOT already pumped +30%, +50%)
-            // and 1h velocity is showing fresh ignition (abs >= 0.8%)
-            val earlyMovers = parsedAll.filter { it.change24hPct in -8.0..15.0 && Math.abs(it.velocity1hPct) >= 0.8 }
-                .sortedByDescending { Math.abs(it.velocity1hPct) }
+            // 1. Fresh Early Bullish Ignitions (LONG):
+            // 12h baseline is calm (-5% to +10%) AND 1h velocity is positive and accelerating (>= +1.0%)
+            val earlyLongs = parsedAll.filter { it.change12hPct in -5.0..10.0 && it.velocity1hPct >= 1.0 }
+                .sortedByDescending { it.velocity1hPct }
 
+            // 2. Fresh Early Bearish Breakdowns (SHORT):
+            // 12h baseline is calm (-10% to +5%) AND 1h velocity is negative (<= -1.2%)
+            val earlyShorts = parsedAll.filter { it.change12hPct in -10.0..5.0 && it.velocity1hPct <= -1.2 }
+                .sortedBy { it.velocity1hPct }
+
+            val earlyMovers = earlyLongs + earlyShorts
             val otherMovers = parsedAll.filterNot { it in earlyMovers }
-                .sortedByDescending { it.change24hPct }
+                .sortedByDescending { it.change12hPct }
 
             val combined = (earlyMovers + otherMovers).take(20)
 
@@ -282,10 +293,17 @@ class SentinelForegroundService : Service() {
                 }
             }
 
-            // New Engine Signal Alert: Fresh Ignition Spark (velocity >= 1.5% from calm base)
+            // New Engine Signal Alert: Fresh Ignition Spark with CVD Confirmation
             val now = System.currentTimeMillis()
-            for (g in earlyMovers.take(8)) {
-                if (Math.abs(g.velocity1hPct) >= 1.5) {
+            for (g in earlyMovers.take(6)) {
+                val isLong = g.velocity1hPct >= 1.5
+                val isShort = g.velocity1hPct <= -1.8
+                if (isLong || isShort) {
+                    val fullSym = if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
+                    val coinCvd = trackedCoins[fullSym]?.cvd5m ?: 0.0
+                    // CVD Direction Check: Do not alert Long if CVD is negative, do not alert Short if CVD is positive!
+                    if ((isLong && coinCvd < 0) || (isShort && coinCvd > 0)) continue
+
                     val lastAlert = alertedGainers[g.symbol] ?: 0L
                     if (now - lastAlert > 15 * 60 * 1000L) {
                         alertedGainers[g.symbol] = now
@@ -293,17 +311,17 @@ class SentinelForegroundService : Service() {
                         val volStr = if (g.turnoverUsd >= 1_000_000) String.format(Locale.US, "$%.1fM", g.turnoverUsd / 1_000_000)
                         else String.format(Locale.US, "$%.0fK", g.turnoverUsd / 1_000)
                         val pStr = if (g.price < 1.0) String.format(Locale.US, "$%.4f", g.price) else String.format(Locale.US, "$%.2f", g.price)
-                        val sideLabel = if (g.velocity1hPct > 0) "🟢 EARLY LONG" else "🔴 EARLY SHORT"
+                        val sideLabel = if (isLong) "🟢 EARLY LONG" else "🔴 EARLY SHORT"
 
                         val alert = AlertItem(
                             timeStr = timeStr,
                             symbol = g.symbol,
                             type = "EARLY_IGNITION",
                             conviction = "HIGH",
-                            message = "🔥 $sideLabel: ${g.symbol} ${String.format(Locale.US, "%+.1f%%", g.velocity1hPct)} (1h Ignition | 24h: ${String.format(Locale.US, "%+.1f%%", g.change24hPct)}) @ $pStr"
+                            message = "🔥 $sideLabel: ${g.symbol} ${String.format(Locale.US, "%+.1f%%", g.velocity1hPct)} (1h Ignition | 12h: ${String.format(Locale.US, "%+.1f%%", g.change12hPct)}) @ $pStr"
                         )
                         addAlert(alert)
-                        sendAlertNotification("🔥 Early Ignition: $sideLabel ${g.symbol}", "Surging ${String.format(Locale.US, "%+.1f%%", g.velocity1hPct)} in 1h from quiet base @ $pStr | Vol: $volStr")
+                        sendAlertNotification("🔥 Early Ignition: $sideLabel ${g.symbol}", "Surging ${String.format(Locale.US, "%+.1f%%", g.velocity1hPct)} in 1h from quiet 12h base @ $pStr | Vol: $volStr")
                     }
                 }
             }
@@ -448,7 +466,18 @@ class SentinelForegroundService : Service() {
         val tierConfig = TierCalculator.getConfig(fullSym)
         val minWallSize = tierConfig.minWhaleOrder * 0.7
 
-        if (ratio >= 60.0 && topBidUsd >= minWallSize) {
+        val coinState = trackedCoins[fullSym]
+        val coinCvd = coinState?.cvd5m ?: 0.0
+        val velocity1h = synchronized(topGainers) {
+            topGainers.firstOrNull { it.symbol == cleanSym }?.velocity1hPct ?: 0.0
+        }
+
+        // Strict CVD Direction Filter:
+        // FOR LONG:
+        // 1. Order book has heavy buy wall: ratio >= 60.0 && topBidUsd >= minWallSize
+        // 2. CVD direction MUST BE POSITIVE: coinCvd > 0 (aggressive buyers dominating)
+        // 3. Price velocity MUST NOT BE DUMPING: velocity1h >= -0.5%
+        if (ratio >= 60.0 && topBidUsd >= minWallSize && coinCvd > 0 && velocity1h >= -0.5) {
             // BULLISH RADAR SIGNAL -> AUTO ENTER LONG!
             lastRadarTradeTime[cleanSym] = now
             val currentPrice = trackedCoins[fullSym]?.price.takeIf { it != null && it > 0 } ?: topBidP
@@ -468,7 +497,7 @@ class SentinelForegroundService : Service() {
                     tpPct = tierConfig.tpPct,
                     slPct = tierConfig.slPct,
                     openTimeStr = timeStr,
-                    triggerReason = "Radar Buy Wall: ${ratio.toInt()}% Bids ($${String.format(Locale.US, "%,.0f", topBidUsd)})"
+                    triggerReason = "Radar Buy Wall: ${ratio.toInt()}% Bids + CVD Rising (+$$topBidUsd)"
                 )
                 synchronized(paperStats.openPositions) {
                     paperStats.openPositions.add(pos)
@@ -479,13 +508,17 @@ class SentinelForegroundService : Service() {
                     symbol = cleanSym,
                     type = "RADAR_TRADE",
                     conviction = "HIGH",
-                    message = "🎯 RADAR LONG $cleanSym @ $pStr | Bids: ${ratio.toInt()}% | Wall: $${String.format(Locale.US, "%,.0f", topBidUsd)} | ${settings.leverage}x"
+                    message = "🎯 RADAR LONG $cleanSym @ $pStr | Bids: ${ratio.toInt()}% | CVD: +$${String.format(Locale.US, "%,.0f", coinCvd)} | ${settings.leverage}x"
                 )
                 addAlert(alert)
-                sendAlertNotification("🎯 Radar Signal: LONG $cleanSym", "Entered LONG @ $pStr (${settings.leverage}x) | ${ratio.toInt()}% Bids")
+                sendAlertNotification("🎯 Radar Signal: LONG $cleanSym", "Entered LONG @ $pStr (${settings.leverage}x) | ${ratio.toInt()}% Bids | CVD Rising")
                 scheduleUiUpdate(force = true)
             }
-        } else if (ratio <= 40.0 && topAskUsd >= minWallSize) {
+        // FOR SHORT:
+        // 1. Order book has heavy sell wall: ratio <= 40.0 && topAskUsd >= minWallSize
+        // 2. CVD direction MUST BE NEGATIVE: coinCvd < 0 (aggressive sellers dominating)
+        // 3. Price velocity MUST NOT BE PUMPING: velocity1h <= 0.5%
+        } else if (ratio <= 40.0 && topAskUsd >= minWallSize && coinCvd < 0 && velocity1h <= 0.5) {
             // BEARISH RADAR SIGNAL -> AUTO ENTER SHORT!
             lastRadarTradeTime[cleanSym] = now
             val currentPrice = trackedCoins[fullSym]?.price.takeIf { it != null && it > 0 } ?: topAskP
@@ -505,7 +538,7 @@ class SentinelForegroundService : Service() {
                     tpPct = tierConfig.tpPct,
                     slPct = tierConfig.slPct,
                     openTimeStr = timeStr,
-                    triggerReason = "Radar Sell Wall: ${(100 - ratio).toInt()}% Asks ($${String.format(Locale.US, "%,.0f", topAskUsd)})"
+                    triggerReason = "Radar Sell Wall: ${(100 - ratio).toInt()}% Asks + CVD Dropping"
                 )
                 synchronized(paperStats.openPositions) {
                     paperStats.openPositions.add(pos)
@@ -516,10 +549,10 @@ class SentinelForegroundService : Service() {
                     symbol = cleanSym,
                     type = "RADAR_TRADE",
                     conviction = "HIGH",
-                    message = "🎯 RADAR SHORT $cleanSym @ $pStr | Asks: ${(100 - ratio).toInt()}% | Wall: $${String.format(Locale.US, "%,.0f", topAskUsd)} | ${settings.leverage}x"
+                    message = "🎯 RADAR SHORT $cleanSym @ $pStr | Asks: ${(100 - ratio).toInt()}% | CVD: -$${String.format(Locale.US, "%,.0f", Math.abs(coinCvd))} | ${settings.leverage}x"
                 )
                 addAlert(alert)
-                sendAlertNotification("🎯 Radar Signal: SHORT $cleanSym", "Entered SHORT @ $pStr (${settings.leverage}x) | ${(100 - ratio).toInt()}% Asks")
+                sendAlertNotification("🎯 Radar Signal: SHORT $cleanSym", "Entered SHORT @ $pStr (${settings.leverage}x) | ${(100 - ratio).toInt()}% Asks | CVD Dropping")
                 scheduleUiUpdate(force = true)
             }
         }
@@ -644,8 +677,9 @@ class SentinelForegroundService : Service() {
         if (totalOpen >= 3) return
 
         val clusterThreshold = config.clusterThreshold
+        val coinCvd = trackedCoins[sym]?.cvd5m ?: 0.0
 
-        if (buyVol >= clusterThreshold && buyVol > sellVol * 1.5) {
+        if (buyVol >= clusterThreshold && buyVol > sellVol * 1.5 && coinCvd > 0) {
             val entry = currentPrice
             val tp = entry * (1.0 + config.tpPct / 100.0)
             val sl = entry * (1.0 - config.slPct / 100.0)
@@ -660,7 +694,7 @@ class SentinelForegroundService : Service() {
                 tpPct = config.tpPct,
                 slPct = config.slPct,
                 openTimeStr = timeStr,
-                triggerReason = "Whale Buy Cluster: $${String.format(Locale.US, "%,.0f", buyVol)}"
+                triggerReason = "Whale Buy Cluster: $${String.format(Locale.US, "%,.0f", buyVol)} + CVD Bullish"
             )
             synchronized(paperStats.openPositions) {
                 paperStats.openPositions.add(pos)
@@ -671,12 +705,12 @@ class SentinelForegroundService : Service() {
                 symbol = cleanSym,
                 type = "AUTO_TRADE",
                 conviction = "HIGH",
-                message = "🤖 AUTO LONG $cleanSym @ $pStr | TP: +${config.tpPct}% | SL: -${config.slPct}% | ${settings.leverage}x [$${String.format(Locale.US, "%,.0f", buyVol)}]"
+                message = "🤖 AUTO LONG $cleanSym @ $pStr | CVD: +$${String.format(Locale.US, "%,.0f", coinCvd)} | TP: +${config.tpPct}% | SL: -${config.slPct}% | ${settings.leverage}x"
             )
             addAlert(alert)
-            sendAlertNotification("🤖 Auto-Trade: LONG $cleanSym", "Entered $${settings.positionSizeUsd.toInt()} (${settings.leverage}x) LONG @ $pStr | Whale: $${String.format(Locale.US, "%,.0f", buyVol)}")
+            sendAlertNotification("🤖 Auto-Trade: LONG $cleanSym", "Entered $${settings.positionSizeUsd.toInt()} (${settings.leverage}x) LONG @ $pStr | CVD Bullish (+$${String.format(Locale.US, "%,.0f", coinCvd)})")
             scheduleUiUpdate(force = true)
-        } else if (sellVol >= clusterThreshold && sellVol > buyVol * 1.5) {
+        } else if (sellVol >= clusterThreshold && sellVol > buyVol * 1.5 && coinCvd < 0) {
             val entry = currentPrice
             val tp = entry * (1.0 - config.tpPct / 100.0)
             val sl = entry * (1.0 + config.slPct / 100.0)
@@ -691,7 +725,7 @@ class SentinelForegroundService : Service() {
                 tpPct = config.tpPct,
                 slPct = config.slPct,
                 openTimeStr = timeStr,
-                triggerReason = "Whale Sell Dump: $${String.format(Locale.US, "%,.0f", sellVol)}"
+                triggerReason = "Whale Sell Dump: $${String.format(Locale.US, "%,.0f", sellVol)} + CVD Bearish"
             )
             synchronized(paperStats.openPositions) {
                 paperStats.openPositions.add(pos)
@@ -702,10 +736,10 @@ class SentinelForegroundService : Service() {
                 symbol = cleanSym,
                 type = "AUTO_TRADE",
                 conviction = "HIGH",
-                message = "🤖 AUTO SHORT $cleanSym @ $pStr | TP: -${config.tpPct}% | SL: +${config.slPct}% | ${settings.leverage}x [$${String.format(Locale.US, "%,.0f", sellVol)}]"
+                message = "🤖 AUTO SHORT $cleanSym @ $pStr | CVD: -$${String.format(Locale.US, "%,.0f", Math.abs(coinCvd))} | TP: -${config.tpPct}% | SL: +${config.slPct}% | ${settings.leverage}x"
             )
             addAlert(alert)
-            sendAlertNotification("🤖 Auto-Trade: SHORT $cleanSym", "Entered $${settings.positionSizeUsd.toInt()} (${settings.leverage}x) SHORT @ $pStr | Dump: $${String.format(Locale.US, "%,.0f", sellVol)}")
+            sendAlertNotification("🤖 Auto-Trade: SHORT $cleanSym", "Entered $${settings.positionSizeUsd.toInt()} (${settings.leverage}x) SHORT @ $pStr | CVD Bearish (-$${String.format(Locale.US, "%,.0f", Math.abs(coinCvd))})")
             scheduleUiUpdate(force = true)
         }
     }

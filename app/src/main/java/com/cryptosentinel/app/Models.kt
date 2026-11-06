@@ -22,9 +22,10 @@ data class AlertItem(
 data class GainerItem(
     val symbol: String,
     val price: Double,
-    val change24hPct: Double,
+    val change12hPct: Double,
     val turnoverUsd: Double,
-    val velocity1hPct: Double = 0.0
+    val velocity1hPct: Double = 0.0,
+    val change24hPct: Double = change12hPct
 )
 
 data class CoinTierConfig(

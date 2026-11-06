@@ -246,26 +246,72 @@ object ChartDialogHelper {
                           cvdPoints.push({ x: x, cvd: runningCvd });
                         });
 
-                        // Cumulative Delta Trend Line
+                        // Cumulative Delta Trend Line with Upper & Lower Lines
                         if (cvdPoints.length > 1) {
                           const minCvd = Math.min(...cvdPoints.map(p => p.cvd));
                           const maxCvd = Math.max(...cvdPoints.map(p => p.cvd));
                           const cvdRange = (maxCvd - minCvd) || 1;
 
+                          const getCvdY = (val) => cvdViewportTop + cvdViewportH - 4 - ((val - minCvd) / cvdRange) * (cvdViewportH * 0.85);
+
+                          // 1. CVD Upper Line (High)
+                          const yHigh = getCvdY(maxCvd);
+                          ctx.save();
+                          ctx.strokeStyle = '#00E676';
+                          ctx.setLineDash([3, 3]);
+                          ctx.lineWidth = 1;
+                          ctx.beginPath();
+                          ctx.moveTo(padLeft, yHigh);
+                          ctx.lineTo(w - padRight, yHigh);
+                          ctx.stroke();
+
+                          ctx.fillStyle = '#00E676';
+                          ctx.font = '8px monospace';
+                          ctx.fillText('CVD HIGH', w - padRight + 2, yHigh + 3);
+                          ctx.restore();
+
+                          // 2. CVD Lower Line (Low)
+                          const yLow = getCvdY(minCvd);
+                          ctx.save();
+                          ctx.strokeStyle = '#FF3D71';
+                          ctx.setLineDash([3, 3]);
+                          ctx.lineWidth = 1;
+                          ctx.beginPath();
+                          ctx.moveTo(padLeft, yLow);
+                          ctx.lineTo(w - padRight, yLow);
+                          ctx.stroke();
+
+                          ctx.fillStyle = '#FF3D71';
+                          ctx.font = '8px monospace';
+                          ctx.fillText('CVD LOW', w - padRight + 2, yLow + 3);
+                          ctx.restore();
+
+                          // 3. CVD Gold Curve
                           ctx.save();
                           ctx.strokeStyle = '#FFD700'; // Gold CVD line
-                          ctx.lineWidth = 1.5;
+                          ctx.lineWidth = 2.0;
                           ctx.beginPath();
                           cvdPoints.forEach((pt, i) => {
-                            const ptY = cvdViewportTop + cvdViewportH - ((pt.cvd - minCvd) / cvdRange) * (cvdViewportH * 0.9);
+                            const ptY = getCvdY(pt.cvd);
                             if (i === 0) ctx.moveTo(pt.x, ptY);
                             else ctx.lineTo(pt.x, ptY);
                           });
                           ctx.stroke();
 
+                          // 4. Direction Slope Indicator
+                          const lastPt = cvdPoints[cvdPoints.length - 1];
+                          const prevPt = cvdPoints[Math.max(0, cvdPoints.length - 4)];
+                          const isRising = lastPt.cvd >= prevPt.cvd;
+                          const slopeText = isRising ? '▲ CVD RISING' : '▼ CVD DROPPING';
+                          const slopeColor = isRising ? '#00E676' : '#FF3D71';
+
+                          ctx.fillStyle = slopeColor;
+                          ctx.font = 'bold 9px monospace';
+                          ctx.fillText(slopeText, padLeft + 120, candleViewportH + 4);
+
                           ctx.fillStyle = '#FFD700';
                           ctx.font = '9px monospace';
-                          ctx.fillText('CVD', w - padRight + 2, cvdViewportTop + 12);
+                          ctx.fillText('CVD', w - padRight + 2, (yHigh + yLow) / 2);
                           ctx.restore();
                         }
                       }
