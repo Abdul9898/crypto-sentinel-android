@@ -7,7 +7,10 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
-class CoinAdapter(private val coins: List<CoinState>) : RecyclerView.Adapter<CoinAdapter.CoinViewHolder>() {
+class CoinAdapter(
+    private val coins: List<CoinState>,
+    private val onItemClick: ((CoinState) -> Unit)? = null
+) : RecyclerView.Adapter<CoinAdapter.CoinViewHolder>() {
 
     class CoinViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val tvSymbol: TextView = view.findViewById(R.id.tvCoinSymbol)
@@ -41,6 +44,10 @@ class CoinAdapter(private val coins: List<CoinState>) : RecyclerView.Adapter<Coi
         holder.tvCvd.setTextColor(if (cvd > 0) Color.parseColor("#00E676") else if (cvd < 0) Color.parseColor("#FF3D71") else Color.WHITE)
         holder.tvBuyRatio.text = String.format(java.util.Locale.US, "%.1f%%", coin.buyRatio)
         holder.tvOi.text = String.format(java.util.Locale.US, "%+.2f%%", coin.oiDeltaPct)
+
+        holder.itemView.setOnClickListener {
+            onItemClick?.invoke(coin)
+        }
     }
 
     override fun getItemCount(): Int = coins.size
@@ -74,7 +81,10 @@ class AlertAdapter(private val alerts: List<AlertItem>) : RecyclerView.Adapter<A
     override fun getItemCount(): Int = alerts.size
 }
 
-class GainerAdapter(private val gainers: List<GainerItem>) : RecyclerView.Adapter<GainerAdapter.GainerViewHolder>() {
+class GainerAdapter(
+    private val gainers: List<GainerItem>,
+    private val onItemClick: ((GainerItem) -> Unit)? = null
+) : RecyclerView.Adapter<GainerAdapter.GainerViewHolder>() {
 
     class GainerViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val tvSymbol: TextView = view.findViewById(R.id.tvGainerSymbol)
@@ -111,6 +121,10 @@ class GainerAdapter(private val gainers: List<GainerItem>) : RecyclerView.Adapte
             val volFormatted = if (gainer.turnoverUsd >= 1_000_000) String.format("Vol: $%.1fM", gainer.turnoverUsd / 1_000_000)
             else String.format("Vol: $%.0fK", gainer.turnoverUsd / 1_000)
             holder.tvVol.text = volFormatted
+        }
+
+        holder.itemView.setOnClickListener {
+            onItemClick?.invoke(gainer)
         }
     }
 

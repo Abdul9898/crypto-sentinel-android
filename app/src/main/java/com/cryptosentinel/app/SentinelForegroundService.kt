@@ -36,6 +36,10 @@ class SentinelForegroundService : Service() {
     private val alertedGainers = ConcurrentHashMap<String, Long>()
     private val lastRadarTradeTime = ConcurrentHashMap<String, Long>()
 
+    // Triple-Timeframe MACD(5,13,1) Engine
+    val coinMacdStatus = ConcurrentHashMap<String, ConcurrentHashMap<String, MacdStatus>>()
+    private val lastMacdTradeTime = ConcurrentHashMap<String, Long>()
+
     var onStateChangedListener: (() -> Unit)? = null
 
     // UI Throttling
@@ -85,6 +89,7 @@ class SentinelForegroundService : Service() {
         connectWebSocket()
         startGainersScanner()
         startDepthRadarScanner()
+        startMacdMultiTimeframeScanner()
     }
 
     fun scheduleUiUpdate(force: Boolean = false) {
@@ -293,39 +298,7 @@ class SentinelForegroundService : Service() {
                 }
             }
 
-            // New Engine Signal Alert: Fresh Ignition Spark with CVD Confirmation
-            val now = System.currentTimeMillis()
-            for (g in earlyMovers.take(6)) {
-                val isLong = g.velocity1hPct >= 1.5
-                val isShort = g.velocity1hPct <= -1.8
-                if (isLong || isShort) {
-                    val fullSym = if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
-                    val coinCvd = trackedCoins[fullSym]?.cvd5m ?: 0.0
-                    // CVD Direction Check: Do not alert Long if CVD is negative, do not alert Short if CVD is positive!
-                    if ((isLong && coinCvd < 0) || (isShort && coinCvd > 0)) continue
-
-                    val lastAlert = alertedGainers[g.symbol] ?: 0L
-                    if (now - lastAlert > 15 * 60 * 1000L) {
-                        alertedGainers[g.symbol] = now
-                        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
-                        val volStr = if (g.turnoverUsd >= 1_000_000) String.format(Locale.US, "$%.1fM", g.turnoverUsd / 1_000_000)
-                        else String.format(Locale.US, "$%.0fK", g.turnoverUsd / 1_000)
-                        val pStr = if (g.price < 1.0) String.format(Locale.US, "$%.4f", g.price) else String.format(Locale.US, "$%.2f", g.price)
-                        val sideLabel = if (isLong) "🟢 EARLY LONG" else "🔴 EARLY SHORT"
-
-                        val alert = AlertItem(
-                            timeStr = timeStr,
-                            symbol = g.symbol,
-                            type = "EARLY_IGNITION",
-                            conviction = "HIGH",
-                            message = "🔥 $sideLabel: ${g.symbol} ${String.format(Locale.US, "%+.1f%%", g.velocity1hPct)} (1h Ignition | 12h: ${String.format(Locale.US, "%+.1f%%", g.change12hPct)}) @ $pStr"
-                        )
-                        addAlert(alert)
-                        sendAlertNotification("🔥 Early Ignition: $sideLabel ${g.symbol}", "Surging ${String.format(Locale.US, "%+.1f%%", g.velocity1hPct)} in 1h from quiet 12h base @ $pStr | Vol: $volStr")
-                    }
-                }
-            }
-
+            // All signals and auto-trades are now driven exclusively by the Triple-Timeframe MACD(5,13,1) Engine
             scheduleUiUpdate()
         }
     }
@@ -429,9 +402,6 @@ class SentinelForegroundService : Service() {
                         bestImbalanceScore = imbalanceScore
                         bestResult = radarState
                     }
-
-                    // Evaluate Radar Signal Auto-Trade (Ratio >= 60% or <= 40%)
-                    evaluateRadarAutoTrade(fullSym, cleanSym, ratio, topBidUsd, topBidP, topAskUsd, topAskP)
                 }
             } catch (_: Exception) {}
         }
@@ -442,120 +412,194 @@ class SentinelForegroundService : Service() {
         }
     }
 
-    private fun evaluateRadarAutoTrade(
-        fullSym: String,
-        cleanSym: String,
-        ratio: Double,
-        topBidUsd: Double,
-        topBidP: Double,
-        topAskUsd: Double,
-        topAskP: Double
+    // =========================================================================
+    // TRIPLE-TIMEFRAME MACD(5, 13, 1) SCANNER & AUTO-TRADE ENGINE
+    // Monitored Timeframes: 5m, 15m, 1h
+    // Trigger Condition: Zero-Line Cross (DIF crosses > 0 for LONG, < 0 for SHORT)
+    // =========================================================================
+    private fun startMacdMultiTimeframeScanner() {
+        serviceScope.launch {
+            delay(4000)
+            val intervals = listOf("5", "15", "60") // 5m, 15m, 1h
+            val tfLabels = mapOf("5" to "5m", "15" to "15m", "60" to "1h")
+
+            while (isActive) {
+                try {
+                    // Collect candidate coins: dynamic top movers from topGainers + core majors
+                    val candidates = mutableListOf<String>()
+                    synchronized(topGainers) {
+                        for (g in topGainers.take(8)) {
+                            val full = if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
+                            if (!candidates.contains(full)) candidates.add(full)
+                        }
+                    }
+                    for (p in listOf("BTCUSDT", "ETHUSDT", "SOLUSDT")) {
+                        if (!candidates.contains(p)) candidates.add(p)
+                    }
+
+                    for (sym in candidates) {
+                        for (interval in intervals) {
+                            if (!isActive) break
+                            val tfLabel = tfLabels[interval] ?: "${interval}m"
+                            try {
+                                val request = Request.Builder()
+                                    .url("https://api.bybit.com/v5/market/kline?category=linear&symbol=$sym&interval=$interval&limit=25")
+                                    .build()
+
+                                client.newCall(request).execute().use { response ->
+                                    if (response.isSuccessful) {
+                                        val body = response.body?.string()
+                                        if (!body.isNullOrEmpty()) {
+                                            val root = gson.fromJson(body, JsonObject::class.java)
+                                            val result = root.getAsJsonObject("result")
+                                            val list = result?.getAsJsonArray("list")
+                                            if (list != null && list.size() >= 14) {
+                                                val candles = mutableListOf<CandleStick>()
+                                                for (item in list) {
+                                                    val arr = item.asJsonArray
+                                                    val t = arr[0].asString.toLongOrNull() ?: 0L
+                                                    val o = arr[1].asString.toDoubleOrNull() ?: 0.0
+                                                    val h = arr[2].asString.toDoubleOrNull() ?: 0.0
+                                                    val l = arr[3].asString.toDoubleOrNull() ?: 0.0
+                                                    val c = arr[4].asString.toDoubleOrNull() ?: 0.0
+                                                    val v = arr[5].asString.toDoubleOrNull() ?: 0.0
+                                                    candles.add(CandleStick(t, o, h, l, c, v))
+                                                }
+                                                candles.reverse() // Chronological order
+
+                                                val macd = computeMacd5_13_1(candles, tfLabel)
+                                                if (macd != null) {
+                                                    val map = coinMacdStatus.getOrPut(sym) { ConcurrentHashMap() }
+                                                    map[interval] = macd
+
+                                                    // Trigger trade directly if Zero-Cross fired on this timeframe
+                                                    evaluateMacdTrigger(sym, interval, tfLabel, macd, candles.last().close)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (_: Exception) {}
+                            delay(120) // Politeness throttle between requests
+                        }
+                    }
+                } catch (_: Exception) {}
+                delay(8000) // Scan cycle repeats every 8 seconds
+            }
+        }
+    }
+
+    private fun computeMacd5_13_1(candles: List<CandleStick>, tfLabel: String): MacdStatus? {
+        if (candles.size < 14) return null
+        val mult5 = 2.0 / (5.0 + 1.0)
+        val mult13 = 2.0 / (13.0 + 1.0)
+
+        var ema5 = candles[0].close
+        var ema13 = candles[0].close
+        var prevDif = 0.0
+        var currentDif = 0.0
+
+        for (i in candles.indices) {
+            val c = candles[i]
+            ema5 = (c.close - ema5) * mult5 + ema5
+            ema13 = (c.close - ema13) * mult13 + ema13
+            val dif = ema5 - ema13
+            if (i == candles.size - 2) {
+                prevDif = dif
+            } else if (i == candles.size - 1) {
+                currentDif = dif
+            }
+        }
+
+        val isCrossUp = prevDif <= 0.0 && currentDif > 0.0
+        val isCrossDown = prevDif >= 0.0 && currentDif < 0.0
+
+        return MacdStatus(
+            timeframe = tfLabel,
+            dif = currentDif,
+            prevDif = prevDif,
+            isBullish = currentDif > 0.0,
+            isCrossUp = isCrossUp,
+            isCrossDown = isCrossDown
+        )
+    }
+
+    private fun evaluateMacdTrigger(
+        sym: String,
+        interval: String,
+        tfLabel: String,
+        macd: MacdStatus,
+        lastPrice: Double
     ) {
+        if (!macd.isCrossUp && !macd.isCrossDown) return
+
+        val isLong = macd.isCrossUp
+        val side = if (isLong) "LONG" else "SHORT"
+        val cooldownKey = "${sym}_${interval}_$side"
         val now = System.currentTimeMillis()
-        val lastTraded = lastRadarTradeTime[cleanSym] ?: 0L
-        if (now - lastTraded < 180_000L) return // 3-minute cooldown
+        val cooldownMs = when (interval) {
+            "5" -> 5 * 60 * 1000L      // 5 min cooldown
+            "15" -> 15 * 60 * 1000L    // 15 min cooldown
+            "60" -> 45 * 60 * 1000L    // 45 min cooldown
+            else -> 10 * 60 * 1000L
+        }
 
+        val lastTrigger = lastMacdTradeTime[cooldownKey] ?: 0L
+        if (now - lastTrigger < cooldownMs) return
+
+        lastMacdTradeTime[cooldownKey] = now
+
+        val cleanSym = sym.replace("1000", "").replace("USDT", "")
+        val currentPrice = trackedCoins[sym]?.price.takeIf { it != null && it > 0 } ?: lastPrice
+        if (currentPrice <= 0) return
+
+        val pStr = if (currentPrice < 1.0) String.format(Locale.US, "$%.4f", currentPrice) else String.format(Locale.US, "$%.2f", currentPrice)
+        val difStr = String.format(Locale.US, "%+.6f", macd.dif)
+        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
+
+        // Direct Auto-Trade Execution
         val totalOpen = synchronized(paperStats.openPositions) { paperStats.openPositions.size }
-        if (totalOpen >= 3) return // Max 3 simultaneous open positions
-
-        val hasOpenPosOnCoin = synchronized(paperStats.openPositions) {
-            paperStats.openPositions.any { it.symbol == fullSym }
-        }
-        if (hasOpenPosOnCoin) return
-
-        val tierConfig = TierCalculator.getConfig(fullSym)
-        val minWallSize = tierConfig.minWhaleOrder * 0.7
-
-        val coinState = trackedCoins[fullSym]
-        val coinCvd = coinState?.cvd5m ?: 0.0
-        val velocity1h = synchronized(topGainers) {
-            topGainers.firstOrNull { it.symbol == cleanSym }?.velocity1hPct ?: 0.0
+        val hasOpenForSym = synchronized(paperStats.openPositions) {
+            paperStats.openPositions.any { it.symbol == sym }
         }
 
-        // Strict CVD Direction Filter:
-        // FOR LONG:
-        // 1. Order book has heavy buy wall: ratio >= 60.0 && topBidUsd >= minWallSize
-        // 2. CVD direction MUST BE POSITIVE: coinCvd > 0 (aggressive buyers dominating)
-        // 3. Price velocity MUST NOT BE DUMPING: velocity1h >= -0.5%
-        if (ratio >= 60.0 && topBidUsd >= minWallSize && coinCvd > 0 && velocity1h >= -0.5) {
-            // BULLISH RADAR SIGNAL -> AUTO ENTER LONG!
-            lastRadarTradeTime[cleanSym] = now
-            val currentPrice = trackedCoins[fullSym]?.price.takeIf { it != null && it > 0 } ?: topBidP
-            if (currentPrice > 0) {
-                val entry = currentPrice
-                val tp = entry * (1.0 + tierConfig.tpPct / 100.0)
-                val sl = entry * (1.0 - tierConfig.slPct / 100.0)
-                val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
-                val pos = PaperPosition(
-                    symbol = fullSym,
-                    side = "LONG",
-                    entryPrice = entry,
-                    sizeUsd = settings.positionSizeUsd,
-                    leverage = settings.leverage,
-                    tpPrice = tp,
-                    slPrice = sl,
-                    tpPct = tierConfig.tpPct,
-                    slPct = tierConfig.slPct,
-                    openTimeStr = timeStr,
-                    triggerReason = "Radar Buy Wall: ${ratio.toInt()}% Bids + CVD Rising (+$$topBidUsd)"
-                )
-                synchronized(paperStats.openPositions) {
-                    paperStats.openPositions.add(pos)
-                }
-                val pStr = if (entry < 1.0) String.format(Locale.US, "$%.4f", entry) else String.format(Locale.US, "$%.2f", entry)
-                val alert = AlertItem(
-                    timeStr = timeStr,
-                    symbol = cleanSym,
-                    type = "RADAR_TRADE",
-                    conviction = "HIGH",
-                    message = "🎯 RADAR LONG $cleanSym @ $pStr | Bids: ${ratio.toInt()}% | CVD: +$${String.format(Locale.US, "%,.0f", coinCvd)} | ${settings.leverage}x"
-                )
-                addAlert(alert)
-                sendAlertNotification("🎯 Radar Signal: LONG $cleanSym", "Entered LONG @ $pStr (${settings.leverage}x) | ${ratio.toInt()}% Bids | CVD Rising")
-                scheduleUiUpdate(force = true)
-            }
-        // FOR SHORT:
-        // 1. Order book has heavy sell wall: ratio <= 40.0 && topAskUsd >= minWallSize
-        // 2. CVD direction MUST BE NEGATIVE: coinCvd < 0 (aggressive sellers dominating)
-        // 3. Price velocity MUST NOT BE PUMPING: velocity1h <= 0.5%
-        } else if (ratio <= 40.0 && topAskUsd >= minWallSize && coinCvd < 0 && velocity1h <= 0.5) {
-            // BEARISH RADAR SIGNAL -> AUTO ENTER SHORT!
-            lastRadarTradeTime[cleanSym] = now
-            val currentPrice = trackedCoins[fullSym]?.price.takeIf { it != null && it > 0 } ?: topAskP
-            if (currentPrice > 0) {
-                val entry = currentPrice
-                val tp = entry * (1.0 - tierConfig.tpPct / 100.0)
-                val sl = entry * (1.0 + tierConfig.slPct / 100.0)
-                val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
-                val pos = PaperPosition(
-                    symbol = fullSym,
-                    side = "SHORT",
-                    entryPrice = entry,
-                    sizeUsd = settings.positionSizeUsd,
-                    leverage = settings.leverage,
-                    tpPrice = tp,
-                    slPrice = sl,
-                    tpPct = tierConfig.tpPct,
-                    slPct = tierConfig.slPct,
-                    openTimeStr = timeStr,
-                    triggerReason = "Radar Sell Wall: ${(100 - ratio).toInt()}% Asks + CVD Dropping"
-                )
-                synchronized(paperStats.openPositions) {
-                    paperStats.openPositions.add(pos)
-                }
-                val pStr = if (entry < 1.0) String.format(Locale.US, "$%.4f", entry) else String.format(Locale.US, "$%.2f", entry)
-                val alert = AlertItem(
-                    timeStr = timeStr,
-                    symbol = cleanSym,
-                    type = "RADAR_TRADE",
-                    conviction = "HIGH",
-                    message = "🎯 RADAR SHORT $cleanSym @ $pStr | Asks: ${(100 - ratio).toInt()}% | CVD: -$${String.format(Locale.US, "%,.0f", Math.abs(coinCvd))} | ${settings.leverage}x"
-                )
-                addAlert(alert)
-                sendAlertNotification("🎯 Radar Signal: SHORT $cleanSym", "Entered SHORT @ $pStr (${settings.leverage}x) | ${(100 - ratio).toInt()}% Asks | CVD Dropping")
-                scheduleUiUpdate(force = true)
+        if (totalOpen < 3 && !hasOpenForSym) {
+            val tierConfig = TierCalculator.getConfig(sym)
+            val tp = if (isLong) currentPrice * (1.0 + tierConfig.tpPct / 100.0) else currentPrice * (1.0 - tierConfig.tpPct / 100.0)
+            val sl = if (isLong) currentPrice * (1.0 - tierConfig.slPct / 100.0) else currentPrice * (1.0 + tierConfig.slPct / 100.0)
+
+            val pos = PaperPosition(
+                symbol = sym,
+                side = side,
+                entryPrice = currentPrice,
+                sizeUsd = settings.positionSizeUsd,
+                leverage = settings.leverage,
+                tpPrice = tp,
+                slPrice = sl,
+                tpPct = tierConfig.tpPct,
+                slPct = tierConfig.slPct,
+                openTimeStr = timeStr,
+                triggerReason = "MACD(5,13,1) $tfLabel Cross (${if (isLong) "Bullish > 0" else "Bearish < 0"})"
+            )
+            synchronized(paperStats.openPositions) {
+                paperStats.openPositions.add(pos)
             }
         }
+
+        // Dedicated Signal Alert & Notification specifying timeframe
+        val alert = AlertItem(
+            timeStr = timeStr,
+            symbol = cleanSym,
+            type = "MACD_TRADE",
+            conviction = "HIGH",
+            message = "🎯 MACD $side ($tfLabel): $cleanSym @ $pStr | DIF: $difStr | 0-Cross"
+        )
+        addAlert(alert)
+        sendAlertNotification(
+            "🎯 MACD Signal: $side $cleanSym ($tfLabel)",
+            "Fired on $tfLabel chart! DIF crossed ${if (isLong) "> 0 (Bullish)" else "< 0 (Bearish)"} @ $pStr (${settings.leverage}x)"
+        )
+        scheduleUiUpdate(force = true)
     }
 
     fun executeRadarTrade(side: String) {
@@ -641,107 +685,11 @@ class SentinelForegroundService : Service() {
 
                     if (usdVal >= tierConfig.minWhaleOrder) {
                         recentWhaleTrades.add(WhaleRecord(now, sym, isBuy, usdVal, p))
-                        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
-                        evaluateWhaleCluster(sym, p, now, timeStr, tierConfig)
                     }
                 }
                 scheduleUiUpdate()
             }
         } catch (_: Exception) {}
-    }
-
-    private fun evaluateWhaleCluster(sym: String, currentPrice: Double, now: Long, timeStr: String, config: CoinTierConfig) {
-        synchronized(recentWhaleTrades) {
-            val cutoff = now - 6000
-            recentWhaleTrades.removeAll { it.timestamp < cutoff }
-        }
-
-        var buyVol = 0.0
-        var sellVol = 0.0
-        synchronized(recentWhaleTrades) {
-            for (w in recentWhaleTrades) {
-                if (w.symbol == sym) {
-                    if (w.isBuy) buyVol += w.usdVal else sellVol += w.usdVal
-                }
-            }
-        }
-
-        val cleanSym = sym.replace("1000", "").replace("USDT", "")
-
-        val hasOpenPos = synchronized(paperStats.openPositions) {
-            paperStats.openPositions.any { it.symbol == sym }
-        }
-        if (hasOpenPos) return
-
-        val totalOpen = synchronized(paperStats.openPositions) { paperStats.openPositions.size }
-        if (totalOpen >= 3) return
-
-        val clusterThreshold = config.clusterThreshold
-        val coinCvd = trackedCoins[sym]?.cvd5m ?: 0.0
-
-        if (buyVol >= clusterThreshold && buyVol > sellVol * 1.5 && coinCvd > 0) {
-            val entry = currentPrice
-            val tp = entry * (1.0 + config.tpPct / 100.0)
-            val sl = entry * (1.0 - config.slPct / 100.0)
-            val pos = PaperPosition(
-                symbol = sym,
-                side = "LONG",
-                entryPrice = entry,
-                sizeUsd = settings.positionSizeUsd,
-                leverage = settings.leverage,
-                tpPrice = tp,
-                slPrice = sl,
-                tpPct = config.tpPct,
-                slPct = config.slPct,
-                openTimeStr = timeStr,
-                triggerReason = "Whale Buy Cluster: $${String.format(Locale.US, "%,.0f", buyVol)} + CVD Bullish"
-            )
-            synchronized(paperStats.openPositions) {
-                paperStats.openPositions.add(pos)
-            }
-            val pStr = if (entry < 1.0) String.format(Locale.US, "$%.4f", entry) else String.format(Locale.US, "$%.2f", entry)
-            val alert = AlertItem(
-                timeStr = timeStr,
-                symbol = cleanSym,
-                type = "AUTO_TRADE",
-                conviction = "HIGH",
-                message = "🤖 AUTO LONG $cleanSym @ $pStr | CVD: +$${String.format(Locale.US, "%,.0f", coinCvd)} | TP: +${config.tpPct}% | SL: -${config.slPct}% | ${settings.leverage}x"
-            )
-            addAlert(alert)
-            sendAlertNotification("🤖 Auto-Trade: LONG $cleanSym", "Entered $${settings.positionSizeUsd.toInt()} (${settings.leverage}x) LONG @ $pStr | CVD Bullish (+$${String.format(Locale.US, "%,.0f", coinCvd)})")
-            scheduleUiUpdate(force = true)
-        } else if (sellVol >= clusterThreshold && sellVol > buyVol * 1.5 && coinCvd < 0) {
-            val entry = currentPrice
-            val tp = entry * (1.0 - config.tpPct / 100.0)
-            val sl = entry * (1.0 + config.slPct / 100.0)
-            val pos = PaperPosition(
-                symbol = sym,
-                side = "SHORT",
-                entryPrice = entry,
-                sizeUsd = settings.positionSizeUsd,
-                leverage = settings.leverage,
-                tpPrice = tp,
-                slPrice = sl,
-                tpPct = config.tpPct,
-                slPct = config.slPct,
-                openTimeStr = timeStr,
-                triggerReason = "Whale Sell Dump: $${String.format(Locale.US, "%,.0f", sellVol)} + CVD Bearish"
-            )
-            synchronized(paperStats.openPositions) {
-                paperStats.openPositions.add(pos)
-            }
-            val pStr = if (entry < 1.0) String.format(Locale.US, "$%.4f", entry) else String.format(Locale.US, "$%.2f", entry)
-            val alert = AlertItem(
-                timeStr = timeStr,
-                symbol = cleanSym,
-                type = "AUTO_TRADE",
-                conviction = "HIGH",
-                message = "🤖 AUTO SHORT $cleanSym @ $pStr | CVD: -$${String.format(Locale.US, "%,.0f", Math.abs(coinCvd))} | TP: -${config.tpPct}% | SL: +${config.slPct}% | ${settings.leverage}x"
-            )
-            addAlert(alert)
-            sendAlertNotification("🤖 Auto-Trade: SHORT $cleanSym", "Entered $${settings.positionSizeUsd.toInt()} (${settings.leverage}x) SHORT @ $pStr | CVD Bearish (-$${String.format(Locale.US, "%,.0f", Math.abs(coinCvd))})")
-            scheduleUiUpdate(force = true)
-        }
     }
 
     private fun checkOpenPositions(sym: String, currentPrice: Double) {

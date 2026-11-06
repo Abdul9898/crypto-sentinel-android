@@ -83,8 +83,28 @@ class MainActivity : AppCompatActivity() {
 
         requestNotificationPermission()
 
-        // Setup Top Gainers Horizontal List
-        gainerAdapter = GainerAdapter(gainersList)
+        // Setup Top Gainers Horizontal List (Tapping opens 3-Timeframe MACD Chart)
+        gainerAdapter = GainerAdapter(gainersList) { gainer ->
+            val s = sentinelService ?: return@GainerAdapter
+            val fullSym = if (gainer.symbol.endsWith("USDT")) gainer.symbol else "${gainer.symbol}USDT"
+            val tier = TierCalculator.getConfig(fullSym)
+            val curP = gainer.price
+            ChartDialogHelper.showChart(
+                context = this,
+                symbol = gainer.symbol,
+                side = if (gainer.velocity1hPct >= 0) "LONG" else "SHORT",
+                entryPrice = curP,
+                tpPrice = curP * (1.0 + tier.tpPct / 100.0),
+                slPrice = curP * (1.0 - tier.slPct / 100.0),
+                tpPct = tier.tpPct,
+                slPct = tier.slPct,
+                positionId = null,
+                statusNote = "12h: ${String.format(Locale.US, "%+.1f%%", gainer.change12hPct)}",
+                onClosePosition = null,
+                macdStatusProvider = { sym -> s.coinMacdStatus[sym] },
+                candlesProvider = { interval, cb -> s.fetchKlines(gainer.symbol, interval, cb) }
+            )
+        }
         binding.rvGainers.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
         binding.rvGainers.adapter = gainerAdapter
 
@@ -103,6 +123,7 @@ class MainActivity : AppCompatActivity() {
                     positionId = null,
                     statusNote = story.outcome,
                     onClosePosition = null,
+                    macdStatusProvider = { sym -> s.coinMacdStatus[sym] },
                     candlesProvider = { interval, cb -> s.fetchKlines(story.symbol, interval, cb) }
                 )
             }
@@ -127,6 +148,7 @@ class MainActivity : AppCompatActivity() {
                     positionId = pos.id,
                     statusNote = "${pos.side} (${pos.statusNote})",
                     onClosePosition = { id -> s.closePositionManually(id) },
+                    macdStatusProvider = { sym -> s.coinMacdStatus[sym] },
                     candlesProvider = { interval, cb -> s.fetchKlines(pos.symbol, interval, cb) }
                 )
             },
@@ -146,8 +168,27 @@ class MainActivity : AppCompatActivity() {
         binding.rvActivePositions.layoutManager = LinearLayoutManager(this)
         binding.rvActivePositions.adapter = activePositionAdapter
 
-        // Setup Coins List
-        coinAdapter = CoinAdapter(coinsList)
+        // Setup Coins List (Tapping opens 3-Timeframe MACD Chart)
+        coinAdapter = CoinAdapter(coinsList) { coin ->
+            val s = sentinelService ?: return@CoinAdapter
+            val tier = TierCalculator.getConfig(coin.symbol)
+            val curP = coin.price
+            ChartDialogHelper.showChart(
+                context = this,
+                symbol = coin.symbol,
+                side = if (coin.cvd5m >= 0) "LONG" else "SHORT",
+                entryPrice = curP,
+                tpPrice = curP * (1.0 + tier.tpPct / 100.0),
+                slPrice = curP * (1.0 - tier.slPct / 100.0),
+                tpPct = tier.tpPct,
+                slPct = tier.slPct,
+                positionId = null,
+                statusNote = "CVD: ${String.format(Locale.US, "$%,.0f", coin.cvd5m)}",
+                onClosePosition = null,
+                macdStatusProvider = { sym -> s.coinMacdStatus[sym] },
+                candlesProvider = { interval, cb -> s.fetchKlines(coin.symbol, interval, cb) }
+            )
+        }
         binding.rvCoins.layoutManager = LinearLayoutManager(this)
         binding.rvCoins.adapter = coinAdapter
 

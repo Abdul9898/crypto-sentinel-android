@@ -19,6 +19,16 @@ data class AlertItem(
     val message: String
 )
 
+data class MacdStatus(
+    val timeframe: String, // "5m", "15m", "1h"
+    val dif: Double,
+    val prevDif: Double,
+    val isBullish: Boolean, // dif > 0
+    val isCrossUp: Boolean, // prevDif <= 0 && dif > 0
+    val isCrossDown: Boolean, // prevDif >= 0 && dif < 0
+    val lastUpdateTime: Long = System.currentTimeMillis()
+)
+
 data class GainerItem(
     val symbol: String,
     val price: Double,

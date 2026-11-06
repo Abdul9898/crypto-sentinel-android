@@ -61,21 +61,20 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.5' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.5' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.6' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.6' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.1.5 (Strict CVD Direction & 12h Calculations)
+            ## ⚡ Crypto Sentinel Android v1.1.6 (Triple-Timeframe MACD(5,13,1) Engine & Multi-Monitor)
             
-            ### 🚀 What's New in v1.1.5:
-            - 🛡️ **Strict CVD Direction Filter**: Never enter into falling knives! Before ANY auto-trade or radar trade is opened:
-              - **LONG**: Requires aggressive buyers with positive CVD (`CVD > 0`) and rising price velocity (`1h >= -0.5%`). Long is FORBIDDEN if CVD is negative/dumping.
-              - **SHORT**: Requires aggressive sellers with negative CVD (`CVD < 0`) and falling price velocity (`1h <= 0.5%`). Short is FORBIDDEN if CVD is positive/rising.
-            - ⏱️ **12-Hour Momentum Calculations**: Switched from 24h baseline to 12h calculations for sharper, more reactive trend detection without waiting for old 24h lag.
-            - 📈 **CVD High/Low Upper & Lower Envelope Bands**: On the interactive Candlestick & CVD chart:
-              - Dashed green **CVD HIGH** upper envelope line.
-              - Dashed red **CVD LOW** lower envelope line.
-              - Dynamic `▲ CVD RISING` / `▼ CVD DROPPING` slope badge showing real-time CVD direction.
-            - 🎯 **Directional Early Ignition Signals**: Gainers are segregated into clean Long and Short ignition candidates with CVD confirmation before alerting.
+            ### 🚀 What's New in v1.1.6:
+            - 🎯 **Triple-Timeframe MACD(5, 13, 1) Engine**: Completely stopped all unconfirmed flow signals and trading. Auto-trades and alerts are now driven purely by confirmed **`MACD(5, 13, 1)`** signals monitored concurrently across **`5m`**, **`15m`**, and **`1h`** charts!
+            - ⚡ **Direct Zero-Cross Trade Execution**:
+              - **LONG**: DIF crosses above 0 (Fast EMA 5 overtakes Slow EMA 13)
+              - **SHORT**: DIF crosses below 0 (Fast EMA 5 breaks below Slow EMA 13)
+              - Places direct paper trades immediately and sends high-priority notifications stating which timeframe fired!
+            - 📊 **3-Timeframe Live Monitor Bar**: The in-app Candlestick dialog displays a real-time 3-timeframe status bar (`5m: 🟢 BULL`, `15m: 🟢 BULL`, `1h: 🔴 BEAR`), letting you monitor all 3 timeframes side-by-side with 1-tap switching.
+            - 📈 **Bybit-Style MACD(5, 13, 1) Sub-Chart**: Features a Cyan DIF curve, centered dashed zero baseline, and colored histogram bars showing momentum expansion.
+            - 👆 **1-Tap Interactive Charts**: Tapping any coin or gainer in the app immediately opens its 3-timeframe MACD chart.
 
             ### 🛠️ Stable Signing:
             - 🔑 **Dual Signature Schemes (v1 JAR + v2 APK Block)**: Permanent dual-signed release with `sentinel.keystore`. Installs seamlessly over previous versions with 1 tap.

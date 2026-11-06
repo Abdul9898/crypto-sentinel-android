@@ -24,6 +24,7 @@ object ChartDialogHelper {
         positionId: String? = null,
         statusNote: String? = null,
         onClosePosition: ((String) -> Unit)? = null,
+        macdStatusProvider: ((symbol: String) -> Map<String, MacdStatus>?)? = null,
         candlesProvider: (interval: String, callback: (List<CandleStick>) -> Unit) -> Unit
     ) {
         val cleanSym = symbol.replace("1000", "").replace("USDT", "")
@@ -38,9 +39,13 @@ object ChartDialogHelper {
         val btnClose: Button = view.findViewById(R.id.btnClosePosition)
         val btnDismiss: Button = view.findViewById(R.id.btnDismissChart)
 
-        val btnTf1m: TextView = view.findViewById(R.id.btnTf1m)
         val btnTf5m: TextView = view.findViewById(R.id.btnTf5m)
         val btnTf15m: TextView = view.findViewById(R.id.btnTf15m)
+        val btnTf1h: TextView = view.findViewById(R.id.btnTf1h)
+
+        val tvMacdBadge5m: TextView = view.findViewById(R.id.tvMacdBadge5m)
+        val tvMacdBadge15m: TextView = view.findViewById(R.id.tvMacdBadge15m)
+        val tvMacdBadge1h: TextView = view.findViewById(R.id.tvMacdBadge1h)
 
         tvTitle.text = "📈 $cleanSym / USDT"
         tvStatus.text = statusNote ?: "$side ACTIVE"
@@ -73,7 +78,33 @@ object ChartDialogHelper {
 
         dialog.show()
 
-        var activeInterval = "1"
+        var activeInterval = "5"
+
+        fun updateMacdMonitorBadges() {
+            val fullSym = if (symbol.endsWith("USDT")) symbol else "${symbol}USDT"
+            val map = macdStatusProvider?.invoke(fullSym)
+
+            fun renderBadge(label: String, s: MacdStatus?): Pair<String, Int> {
+                if (s == null) return Pair("$label: Sync...", Color.parseColor("#657786"))
+                val icon = if (s.isBullish) "🟢" else "🔴"
+                val dir = if (s.isBullish) "BULL" else "BEAR"
+                val color = if (s.isBullish) Color.parseColor("#00E676") else Color.parseColor("#FF3D71")
+                val difStr = String.format(Locale.US, "%+.4f", s.dif)
+                return Pair("$label: $icon $dir ($difStr)", color)
+            }
+
+            val b5 = renderBadge("5m", map?.get("5"))
+            tvMacdBadge5m.text = b5.first
+            tvMacdBadge5m.setTextColor(b5.second)
+
+            val b15 = renderBadge("15m", map?.get("15"))
+            tvMacdBadge15m.text = b15.first
+            tvMacdBadge15m.setTextColor(b15.second)
+
+            val b1h = renderBadge("1h", map?.get("60"))
+            tvMacdBadge1h.text = b1h.first
+            tvMacdBadge1h.setTextColor(b1h.second)
+        }
 
         fun updateTfButtons(selected: String) {
             activeInterval = selected
@@ -82,14 +113,16 @@ object ChartDialogHelper {
             val inactiveBg = 0xFF232B3A.toInt() // border
             val inactiveText = Color.WHITE
 
-            btnTf1m.setBackgroundColor(if (selected == "1") activeBg else inactiveBg)
-            btnTf1m.setTextColor(if (selected == "1") activeText else inactiveText)
-
             btnTf5m.setBackgroundColor(if (selected == "5") activeBg else inactiveBg)
             btnTf5m.setTextColor(if (selected == "5") activeText else inactiveText)
 
             btnTf15m.setBackgroundColor(if (selected == "15") activeBg else inactiveBg)
             btnTf15m.setTextColor(if (selected == "15") activeText else inactiveText)
+
+            btnTf1h.setBackgroundColor(if (selected == "60") activeBg else inactiveBg)
+            btnTf1h.setTextColor(if (selected == "60") activeText else inactiveText)
+
+            updateMacdMonitorBadges()
         }
 
         fun loadChart(interval: String) {
@@ -137,10 +170,10 @@ object ChartDialogHelper {
                         ctx.font = '12px sans-serif';
                         ctx.fillText('Syncing candle data...', 20, h / 2);
                       } else {
-                        // 1. Candlestick upper viewport (70% of height)
-                        const candleViewportH = h * 0.70;
-                        const cvdViewportTop = candleViewportH + 15;
-                        const cvdViewportH = h - cvdViewportTop - 8;
+                        // 1. Candlestick upper viewport (56% of total height)
+                        const candleViewportH = h * 0.56;
+                        const macdViewportTop = candleViewportH + 16;
+                        const macdViewportH = h - macdViewportTop - 8;
 
                         let minP = Math.min(...candles.map(c => c.low), entryPrice, tpPrice, slPrice);
                         let maxP = Math.max(...candles.map(c => c.high), entryPrice, tpPrice, slPrice);
@@ -213,7 +246,7 @@ object ChartDialogHelper {
                         drawLevel(tpPrice, '#00E676', 'TP');
                         drawLevel(slPrice, '#FF3D71', 'SL');
 
-                        // 2. CVD / Volume Sub-Chart Divider
+                        // 2. MACD(5, 13, 1) Sub-Chart Divider
                         ctx.save();
                         ctx.strokeStyle = '#232B3A';
                         ctx.lineWidth = 1;
@@ -222,96 +255,86 @@ object ChartDialogHelper {
                         ctx.lineTo(w - padRight, candleViewportH + 6);
                         ctx.stroke();
 
-                        ctx.fillStyle = '#657786';
-                        ctx.font = '9px sans-serif';
-                        ctx.fillText('VOLUME & CVD DELTA', padLeft, candleViewportH + 4);
-                        ctx.restore();
-
-                        // 3. CVD Volume Bars & Cumulative Line
-                        const maxVol = Math.max(...candles.map(c => c.volume), 1);
-                        let runningCvd = 0;
-                        const cvdPoints = [];
+                        // 3. Compute MACD(5, 13, 1) (Fast 5, Slow 13, DEA 1)
+                        const mult5 = 2 / (5 + 1);
+                        const mult13 = 2 / (13 + 1);
+                        let ema5 = candles[0].close;
+                        let ema13 = candles[0].close;
+                        const macdPoints = [];
 
                         candles.forEach((c, idx) => {
+                          ema5 = (c.close - ema5) * mult5 + ema5;
+                          ema13 = (c.close - ema13) * mult13 + ema13;
+                          const dif = ema5 - ema13;
                           const x = padLeft + idx * step + step / 2;
-                          const isUp = c.close >= c.open;
-                          const delta = isUp ? c.volume : -c.volume;
-                          runningCvd += delta;
-
-                          const barH = Math.max((c.volume / maxVol) * cvdViewportH * 0.85, 2);
-                          const barY = cvdViewportTop + cvdViewportH - barH;
-
-                          ctx.fillStyle = isUp ? '#00E67688' : '#FF3D7188';
-                          ctx.fillRect(x - candleW / 2, barY, candleW, barH);
-                          cvdPoints.push({ x: x, cvd: runningCvd });
+                          macdPoints.push({ x: x, dif: dif });
                         });
 
-                        // Cumulative Delta Trend Line with Upper & Lower Lines
-                        if (cvdPoints.length > 1) {
-                          const minCvd = Math.min(...cvdPoints.map(p => p.cvd));
-                          const maxCvd = Math.max(...cvdPoints.map(p => p.cvd));
-                          const cvdRange = (maxCvd - minCvd) || 1;
+                        if (macdPoints.length > 1) {
+                          const maxAbsDif = Math.max(...macdPoints.map(p => Math.abs(p.dif)), 0.00001);
+                          const zeroY = macdViewportTop + macdViewportH / 2;
+                          const getMacdY = (val) => zeroY - (val / maxAbsDif) * (macdViewportH * 0.44);
 
-                          const getCvdY = (val) => cvdViewportTop + cvdViewportH - 4 - ((val - minCvd) / cvdRange) * (cvdViewportH * 0.85);
-
-                          // 1. CVD Upper Line (High)
-                          const yHigh = getCvdY(maxCvd);
+                          // 3a. Dashed Zero Baseline (Confirmation Center)
                           ctx.save();
-                          ctx.strokeStyle = '#00E676';
+                          ctx.strokeStyle = '#657786';
                           ctx.setLineDash([3, 3]);
                           ctx.lineWidth = 1;
                           ctx.beginPath();
-                          ctx.moveTo(padLeft, yHigh);
-                          ctx.lineTo(w - padRight, yHigh);
+                          ctx.moveTo(padLeft, zeroY);
+                          ctx.lineTo(w - padRight, zeroY);
                           ctx.stroke();
 
-                          ctx.fillStyle = '#00E676';
+                          ctx.fillStyle = '#657786';
                           ctx.font = '8px monospace';
-                          ctx.fillText('CVD HIGH', w - padRight + 2, yHigh + 3);
+                          ctx.fillText('0.00', w - padRight + 2, zeroY + 3);
                           ctx.restore();
 
-                          // 2. CVD Lower Line (Low)
-                          const yLow = getCvdY(minCvd);
-                          ctx.save();
-                          ctx.strokeStyle = '#FF3D71';
-                          ctx.setLineDash([3, 3]);
-                          ctx.lineWidth = 1;
-                          ctx.beginPath();
-                          ctx.moveTo(padLeft, yLow);
-                          ctx.lineTo(w - padRight, yLow);
-                          ctx.stroke();
+                          // 3b. MACD Histogram Bars from Zero Line
+                          macdPoints.forEach(pt => {
+                            const ptY = getMacdY(pt.dif);
+                            const isBull = pt.dif >= 0;
+                            ctx.fillStyle = isBull ? '#00E67644' : '#FF3D7144';
+                            const barTop = Math.min(zeroY, ptY);
+                            const barH = Math.max(Math.abs(zeroY - ptY), 1);
+                            ctx.fillRect(pt.x - candleW / 2, barTop, candleW, barH);
+                          });
 
-                          ctx.fillStyle = '#FF3D71';
-                          ctx.font = '8px monospace';
-                          ctx.fillText('CVD LOW', w - padRight + 2, yLow + 3);
-                          ctx.restore();
-
-                          // 3. CVD Gold Curve
+                          // 3c. Cyan DIF Line (Fast EMA 5 - Slow EMA 13)
                           ctx.save();
-                          ctx.strokeStyle = '#FFD700'; // Gold CVD line
+                          ctx.strokeStyle = '#00E5FF'; // Cyan DIF
                           ctx.lineWidth = 2.0;
                           ctx.beginPath();
-                          cvdPoints.forEach((pt, i) => {
-                            const ptY = getCvdY(pt.cvd);
+                          macdPoints.forEach((pt, i) => {
+                            const ptY = getMacdY(pt.dif);
                             if (i === 0) ctx.moveTo(pt.x, ptY);
                             else ctx.lineTo(pt.x, ptY);
                           });
                           ctx.stroke();
+                          ctx.restore();
 
-                          // 4. Direction Slope Indicator
-                          const lastPt = cvdPoints[cvdPoints.length - 1];
-                          const prevPt = cvdPoints[Math.max(0, cvdPoints.length - 4)];
-                          const isRising = lastPt.cvd >= prevPt.cvd;
-                          const slopeText = isRising ? '▲ CVD RISING' : '▼ CVD DROPPING';
-                          const slopeColor = isRising ? '#00E676' : '#FF3D71';
+                          // 3d. Sub-chart Header & Cross Badge
+                          const lastPt = macdPoints[macdPoints.length - 1];
+                          const prevPt = macdPoints.length > 1 ? macdPoints[macdPoints.length - 2] : lastPt;
+                          const isCrossUp = prevPt.dif <= 0 && lastPt.dif > 0;
+                          const isCrossDown = prevPt.dif >= 0 && lastPt.dif < 0;
+                          const isBull = lastPt.dif >= 0;
 
-                          ctx.fillStyle = slopeColor;
-                          ctx.font = 'bold 9px monospace';
-                          ctx.fillText(slopeText, padLeft + 120, candleViewportH + 4);
-
+                          ctx.save();
                           ctx.fillStyle = '#FFD700';
+                          ctx.font = 'bold 9px monospace';
+                          ctx.fillText('MACD(5,13,1)', padLeft, candleViewportH + 4);
+
+                          ctx.fillStyle = '#00E5FF';
                           ctx.font = '9px monospace';
-                          ctx.fillText('CVD', w - padRight + 2, (yHigh + yLow) / 2);
+                          ctx.fillText('DIF: ' + (lastPt.dif >= 0 ? '+' : '') + lastPt.dif.toFixed(6), padLeft + 75, candleViewportH + 4);
+
+                          // Status Badge
+                          const badgeText = isCrossUp ? '🔥 0-CROSS LONG' : isCrossDown ? '🔥 0-CROSS SHORT' : (isBull ? '▲ BULLISH (5>13)' : '▼ BEARISH (5<13)');
+                          const badgeColor = isBull ? '#00E676' : '#FF3D71';
+                          ctx.fillStyle = badgeColor;
+                          ctx.font = 'bold 9px monospace';
+                          ctx.fillText(badgeText, padLeft + 185, candleViewportH + 4);
                           ctx.restore();
                         }
                       }
@@ -324,10 +347,14 @@ object ChartDialogHelper {
             }
         }
 
-        btnTf1m.setOnClickListener { loadChart("1") }
         btnTf5m.setOnClickListener { loadChart("5") }
         btnTf15m.setOnClickListener { loadChart("15") }
+        btnTf1h.setOnClickListener { loadChart("60") }
 
-        loadChart("1")
+        tvMacdBadge5m.setOnClickListener { loadChart("5") }
+        tvMacdBadge15m.setOnClickListener { loadChart("15") }
+        tvMacdBadge1h.setOnClickListener { loadChart("60") }
+
+        loadChart("5")
     }
 }
