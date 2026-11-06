@@ -94,14 +94,19 @@ class MainActivity : AppCompatActivity() {
             val fullSym = if (gainer.symbol.endsWith("USDT")) gainer.symbol else "${gainer.symbol}USDT"
             val tier = TierCalculator.getConfig(fullSym)
             val curP = gainer.price
+            val isLong = gainer.velocity1hPct >= 0
+            val notional = s.settings.positionSizeUsd * s.settings.leverage
+            val quickTpPct = if (notional > 0.0) (s.settings.targetProfitUsd / notional) * 100.0 else tier.tpPct
+            val tpPrice = if (isLong) curP * (1.0 + quickTpPct / 100.0) else curP * (1.0 - quickTpPct / 100.0)
+            val slPrice = if (isLong) curP * (1.0 - tier.slPct / 100.0) else curP * (1.0 + tier.slPct / 100.0)
             ChartDialogHelper.showChart(
                 context = this,
                 symbol = gainer.symbol,
-                side = if (gainer.velocity1hPct >= 0) "LONG" else "SHORT",
+                side = if (isLong) "LONG" else "SHORT",
                 entryPrice = curP,
-                tpPrice = curP * (1.0 + tier.tpPct / 100.0),
-                slPrice = curP * (1.0 - tier.slPct / 100.0),
-                tpPct = tier.tpPct,
+                tpPrice = tpPrice,
+                slPrice = slPrice,
+                tpPct = quickTpPct,
                 slPct = tier.slPct,
                 positionId = null,
                 statusNote = "12h: ${String.format(Locale.US, "%+.1f%%", gainer.change12hPct)}",
@@ -179,14 +184,19 @@ class MainActivity : AppCompatActivity() {
             s.selectFocalSymbol(coin.symbol)
             val tier = TierCalculator.getConfig(coin.symbol)
             val curP = coin.price
+            val isLong = coin.cvd5m >= 0
+            val notional = s.settings.positionSizeUsd * s.settings.leverage
+            val quickTpPct = if (notional > 0.0) (s.settings.targetProfitUsd / notional) * 100.0 else tier.tpPct
+            val tpPrice = if (isLong) curP * (1.0 + quickTpPct / 100.0) else curP * (1.0 - quickTpPct / 100.0)
+            val slPrice = if (isLong) curP * (1.0 - tier.slPct / 100.0) else curP * (1.0 + tier.slPct / 100.0)
             ChartDialogHelper.showChart(
                 context = this,
                 symbol = coin.symbol,
-                side = if (coin.cvd5m >= 0) "LONG" else "SHORT",
+                side = if (isLong) "LONG" else "SHORT",
                 entryPrice = curP,
-                tpPrice = curP * (1.0 + tier.tpPct / 100.0),
-                slPrice = curP * (1.0 - tier.slPct / 100.0),
-                tpPct = tier.tpPct,
+                tpPrice = tpPrice,
+                slPrice = slPrice,
+                tpPct = quickTpPct,
                 slPct = tier.slPct,
                 positionId = null,
                 statusNote = "CVD: ${String.format(Locale.US, "$%,.0f", coin.cvd5m)}",
@@ -216,14 +226,18 @@ class MainActivity : AppCompatActivity() {
             val tier = TierCalculator.getConfig(fullSym)
             val curP = s.trackedCoins[fullSym]?.price.takeIf { it != null && it > 0 } ?: s.proEngineState.currentPrice
             val isBullish = s.proEngineState.macd15mBias == "BULLISH"
+            val notional = s.settings.positionSizeUsd * s.settings.leverage
+            val quickTpPct = if (notional > 0.0) (s.settings.targetProfitUsd / notional) * 100.0 else tier.tpPct
+            val tpPrice = if (isBullish) curP * (1.0 + quickTpPct / 100.0) else curP * (1.0 - quickTpPct / 100.0)
+            val slPrice = if (isBullish) curP * (1.0 - tier.slPct / 100.0) else curP * (1.0 + tier.slPct / 100.0)
             ChartDialogHelper.showChart(
                 context = this,
                 symbol = targetSym,
                 side = if (isBullish) "LONG" else "SHORT",
                 entryPrice = curP,
-                tpPrice = curP * (1.0 + tier.tpPct / 100.0),
-                slPrice = curP * (1.0 - tier.slPct / 100.0),
-                tpPct = tier.tpPct,
+                tpPrice = tpPrice,
+                slPrice = slPrice,
+                tpPct = quickTpPct,
                 slPct = tier.slPct,
                 positionId = null,
                 statusNote = "PRO MACD: ${s.proEngineState.macd15mBias}",
@@ -264,6 +278,7 @@ class MainActivity : AppCompatActivity() {
 
         val etStartingBalance: EditText = view.findViewById(R.id.etStartingBalance)
         val etPositionSize: EditText = view.findViewById(R.id.etPositionSize)
+        val etTargetProfit: EditText = view.findViewById(R.id.etTargetProfit)
         val switchBreakEven: SwitchMaterial = view.findViewById(R.id.switchBreakEven)
         val switchTrailing: SwitchMaterial = view.findViewById(R.id.switchTrailing)
         val btnResetPaper: MaterialButton = view.findViewById(R.id.btnResetPaper)
@@ -278,6 +293,7 @@ class MainActivity : AppCompatActivity() {
 
         etStartingBalance.setText(String.format(Locale.US, "%.0f", current.startingBalance))
         etPositionSize.setText(String.format(Locale.US, "%.0f", current.positionSizeUsd))
+        etTargetProfit.setText(String.format(Locale.US, "%.1f", current.targetProfitUsd))
         switchBreakEven.isChecked = current.isBreakEvenEnabled
         switchTrailing.isChecked = current.isTrailingEnabled
 
@@ -327,15 +343,17 @@ class MainActivity : AppCompatActivity() {
         btnSaveSettings.setOnClickListener {
             val startBal = etStartingBalance.text.toString().toDoubleOrNull() ?: current.startingBalance
             val posSize = etPositionSize.text.toString().toDoubleOrNull() ?: current.positionSizeUsd
+            val targetProfit = etTargetProfit.text.toString().toDoubleOrNull() ?: current.targetProfitUsd
             val newSettings = current.copy(
                 startingBalance = startBal,
                 positionSizeUsd = posSize,
+                targetProfitUsd = targetProfit,
                 leverage = selectedLev,
                 isBreakEvenEnabled = switchBreakEven.isChecked,
                 isTrailingEnabled = switchTrailing.isChecked
             )
             s.updateSettings(newSettings)
-            Toast.makeText(this, "Trading Settings Saved! (${selectedLev}x Leverage)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Trading Settings Saved! (Quick TP: $${String.format(Locale.US, "%.2f", targetProfit)} | ${selectedLev}x)", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
 

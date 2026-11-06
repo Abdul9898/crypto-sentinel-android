@@ -61,26 +61,21 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.7' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.7' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.8' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.8' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.1.7 (24/7 Persistent State & PRO Color-Coded MACD Engine)
+            ## ⚡ Crypto Sentinel Android v1.1.8 (⚡ Quick $2.00 Take Profit Engine)
             
-            ### 🚀 What's New in v1.1.7:
-            - 🛡️ **24/7 State Persistence**: Trades, open positions, balance, win/loss stats, and trade stories are now persisted to disk (`StateManager`). Survives Android battery saving, background memory clearance, or closing the app for days. Everything resumes smoothly without resetting!
-            - ⚡ **Auto-Start On Phone Reboot**: Added `BootReceiver` (`RECEIVE_BOOT_COMPLETED`, `QUICKBOOT_POWERON`, and `MY_PACKAGE_REPLACED`) so the background monitoring service automatically launches whenever your phone turns on or updates.
-            - 🔋 **Battery Optimization Exemption**: Direct 1-tap exemption (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`) prevents Android Doze mode from sleeping the WebSocket or background scanners. No external VPS needed—your phone runs completely standalone!
-            - 🎯 **Removed Order Flow Radar**: Fully purged obsolete order flow whale alerts and depth wall radars.
-            - 🎨 **New PRO Color-Coded MACD(5,13,1) Engine Card**:
-              - Dynamic coin title, current price, and 12-hour change %.
-              - 1-hour momentum velocity & live signal status.
-              - **Triple Color-Coded Badges**: Real-time status for **5M**, **15M**, and **1H** (`🟢 BULLISH`, `🔴 BEARISH`, or `⚪ SCANNING`).
-              - **1-Tap 3-TF Chart**: Instant full candlestick and MACD(5,13,1) sub-chart.
-              - **1-Tap Direct Execution**: Quick LONG and SHORT buttons for the focal coin.
-
+            ### 🚀 What's New in v1.1.8:
+            - ⚡ **Quick $2.00 Take Profit Engine**: Any coin entering a trade will now lock in profit and exit as soon as it reaches $2.00 net USD profit (`pnlUsd >= $2.00`). Accumulate gains fast with high turnover without waiting for deep price swings!
+            - 🛡️ **Preserved Stop Loss Floor**: Stop loss thresholds (`slPct`), auto break-even (`isBreakEvenEnabled`), and trailing stop protection are completely preserved without alteration for robust downside protection.
+            - ⚙️ **Configurable Target Profit**: Added a dedicated `⚡ Quick Take Profit (Target USD Profit)` setting in Trading Settings (defaults to $2.0 USD).
+            - 📊 **Synchronized 3-TF Chart**: Chart preview lines for TP automatically calculate and display the exact target price corresponding to your $2 take-profit level across all timeframes (5m, 15m, 1h).
+            - 🏆 **Clear Victory Outcome**: Closed winning trades now log clearly as `🏆 [WIN (+$2 TP)]` in your alerts and trade stories.
+            
             ### 🛠️ Stable Signing:
             - 🔑 **Dual Signature Schemes (v1 + v2)**: Permanent signed release with `sentinel.keystore`. Installs seamlessly over previous versions without signature conflicts.
-
+            
             ### 📥 Download
             Download `CryptoSentinel.apk` below and install directly on your phone.
           files: output/CryptoSentinel.apk

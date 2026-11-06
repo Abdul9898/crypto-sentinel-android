@@ -94,6 +94,36 @@
                     android:textColor="@color/text_white"
                     android:textSize="13sp" />
 
+                <!-- Quick Take Profit Target -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="⚡ Quick Take Profit (Target USD Profit)"
+                    android:textColor="@color/neon_green"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <EditText
+                    android:id="@+id/etTargetProfit"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="4dp"
+                    android:background="@color/bg_dark"
+                    android:inputType="numberDecimal"
+                    android:paddingHorizontal="10dp"
+                    android:text="2.0"
+                    android:textColor="@color/neon_green"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Automatically closes trade immediately when it reaches this profit (Default: $2.00)"
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+
                 <!-- Leverage Selector -->
                 <TextView
                     android:layout_width="wrap_content"

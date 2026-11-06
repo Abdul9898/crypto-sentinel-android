@@ -492,7 +492,10 @@ class SentinelForegroundService : Service() {
 
         if (totalOpen < 3 && !hasOpenForSym) {
             val tierConfig = TierCalculator.getConfig(sym)
-            val tp = if (isLong) currentPrice * (1.0 + tierConfig.tpPct / 100.0) else currentPrice * (1.0 - tierConfig.tpPct / 100.0)
+            val targetProfit = if (settings.targetProfitUsd > 0.0) settings.targetProfitUsd else 2.0
+            val notional = settings.positionSizeUsd * settings.leverage
+            val quickTpPct = if (notional > 0.0) (targetProfit / notional) * 100.0 else tierConfig.tpPct
+            val tp = if (isLong) currentPrice * (1.0 + quickTpPct / 100.0) else currentPrice * (1.0 - quickTpPct / 100.0)
             val sl = if (isLong) currentPrice * (1.0 - tierConfig.slPct / 100.0) else currentPrice * (1.0 + tierConfig.slPct / 100.0)
 
             val pos = PaperPosition(
@@ -503,7 +506,7 @@ class SentinelForegroundService : Service() {
                 leverage = settings.leverage,
                 tpPrice = tp,
                 slPrice = sl,
-                tpPct = tierConfig.tpPct,
+                tpPct = quickTpPct,
                 slPct = tierConfig.slPct,
                 openTimeStr = timeStr,
                 triggerReason = "MACD(5,13,1) $tfLabel Cross (${if (isLong) "Bullish > 0" else "Bearish < 0"})"
@@ -546,7 +549,10 @@ class SentinelForegroundService : Service() {
         if (curPrice <= 0) return
 
         val isLong = side == "LONG"
-        val tp = if (isLong) curPrice * (1.0 + tierConfig.tpPct / 100.0) else curPrice * (1.0 - tierConfig.tpPct / 100.0)
+        val targetProfit = if (settings.targetProfitUsd > 0.0) settings.targetProfitUsd else 2.0
+        val notional = settings.positionSizeUsd * settings.leverage
+        val quickTpPct = if (notional > 0.0) (targetProfit / notional) * 100.0 else tierConfig.tpPct
+        val tp = if (isLong) curPrice * (1.0 + quickTpPct / 100.0) else curPrice * (1.0 - quickTpPct / 100.0)
         val sl = if (isLong) curPrice * (1.0 - tierConfig.slPct / 100.0) else curPrice * (1.0 + tierConfig.slPct / 100.0)
         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
 
@@ -558,7 +564,7 @@ class SentinelForegroundService : Service() {
             leverage = settings.leverage,
             tpPrice = tp,
             slPrice = sl,
-            tpPct = tierConfig.tpPct,
+            tpPct = quickTpPct,
             slPct = tierConfig.slPct,
             openTimeStr = timeStr,
             triggerReason = "1-Tap PRO Execution ($side)"
@@ -677,29 +683,21 @@ class SentinelForegroundService : Service() {
                         }
                     }
 
-                    // 4. Trigger Check
-                    if (isLong) {
-                        if (currentPrice >= pos.tpPrice) {
-                            toClose.add(Triple(pos, "WIN (TP)", currentPrice))
-                            it.remove()
-                        } else if (currentPrice <= pos.slPrice) {
-                            val outcome = if (pos.isTrailingActive && currentPrice > pos.entryPrice) "WIN (TRAIL)"
-                                          else if (pos.isBreakEvenSet && currentPrice >= pos.entryPrice * 0.999) "BREAK-EVEN"
-                                          else "LOSS (SL)"
-                            toClose.add(Triple(pos, outcome, currentPrice))
-                            it.remove()
-                        }
-                    } else {
-                        if (currentPrice <= pos.tpPrice) {
-                            toClose.add(Triple(pos, "WIN (TP)", currentPrice))
-                            it.remove()
-                        } else if (currentPrice >= pos.slPrice) {
-                            val outcome = if (pos.isTrailingActive && currentPrice < pos.entryPrice) "WIN (TRAIL)"
-                                          else if (pos.isBreakEvenSet && currentPrice <= pos.entryPrice * 1.001) "BREAK-EVEN"
-                                          else "LOSS (SL)"
-                            toClose.add(Triple(pos, outcome, currentPrice))
-                            it.remove()
-                        }
+                    // 4. Trigger Check: Quick Target Profit (e.g. $2.00) or TP price hit, while preserving SL
+                    val targetProfit = if (settings.targetProfitUsd > 0.0) settings.targetProfitUsd else 2.0
+                    val curPnlUsd = (diffPct / 100.0) * pos.sizeUsd * pos.leverage
+                    val isProfitHit = curPnlUsd >= targetProfit || (if (isLong) currentPrice >= pos.tpPrice else currentPrice <= pos.tpPrice)
+
+                    if (isProfitHit) {
+                        val tpOutcome = if (Math.abs(targetProfit - 2.0) < 0.05) "WIN (+$2 TP)" else String.format(Locale.US, "WIN (+%.1f$ TP)", targetProfit)
+                        toClose.add(Triple(pos, tpOutcome, currentPrice))
+                        it.remove()
+                    } else if (if (isLong) currentPrice <= pos.slPrice else currentPrice >= pos.slPrice) {
+                        val outcome = if (pos.isTrailingActive && ((isLong && currentPrice > pos.entryPrice) || (!isLong && currentPrice < pos.entryPrice))) "WIN (TRAIL)"
+                                      else if (pos.isBreakEvenSet && ((isLong && currentPrice >= pos.entryPrice * 0.999) || (!isLong && currentPrice <= pos.entryPrice * 1.001))) "BREAK-EVEN"
+                                      else "LOSS (SL)"
+                        toClose.add(Triple(pos, outcome, currentPrice))
+                        it.remove()
                     }
                 }
             }
@@ -726,10 +724,10 @@ class SentinelForegroundService : Service() {
             val pnlStr = String.format(Locale.US, "%s$%,.2f", if (pnlUsd >= 0) "+" else "-", Math.abs(pnlUsd))
             val signPct = String.format(Locale.US, "%+.1f%%", rawDiffPct * pos.leverage)
 
-            val icon = when (outcome) {
-                "WIN (TP)" -> "🏆"
-                "WIN (TRAIL)" -> "🚀"
-                "BREAK-EVEN" -> "🛡️"
+            val icon = when {
+                outcome == "WIN (TRAIL)" -> "🚀"
+                outcome.startsWith("WIN") -> "🏆"
+                outcome == "BREAK-EVEN" -> "🛡️"
                 else -> "🛑"
             }
 

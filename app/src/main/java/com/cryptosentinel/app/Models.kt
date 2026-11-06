@@ -162,6 +162,7 @@ data class TradingSettings(
     var startingBalance: Double = 10000.0,
     var positionSizeUsd: Double = 500.0,
     var leverage: Int = 5,
+    var targetProfitUsd: Double = 2.0,
     var isBreakEvenEnabled: Boolean = true,
     var beTriggerPct: Double = 1.5,
     var isTrailingEnabled: Boolean = true,
