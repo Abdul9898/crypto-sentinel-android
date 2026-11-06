@@ -90,7 +90,7 @@ class MainActivity : AppCompatActivity() {
         // Setup Top Gainers Horizontal List (Tapping opens 3-Timeframe MACD Chart)
         gainerAdapter = GainerAdapter(gainersList) { gainer ->
             val s = sentinelService ?: return@GainerAdapter
-            s.setFocalSymbol(gainer.symbol)
+            s.selectFocalSymbol(gainer.symbol)
             val fullSym = if (gainer.symbol.endsWith("USDT")) gainer.symbol else "${gainer.symbol}USDT"
             val tier = TierCalculator.getConfig(fullSym)
             val curP = gainer.price
@@ -176,7 +176,7 @@ class MainActivity : AppCompatActivity() {
         // Setup Coins List (Tapping opens 3-Timeframe MACD Chart)
         coinAdapter = CoinAdapter(coinsList) { coin ->
             val s = sentinelService ?: return@CoinAdapter
-            s.setFocalSymbol(coin.symbol)
+            s.selectFocalSymbol(coin.symbol)
             val tier = TierCalculator.getConfig(coin.symbol)
             val curP = coin.price
             ChartDialogHelper.showChart(

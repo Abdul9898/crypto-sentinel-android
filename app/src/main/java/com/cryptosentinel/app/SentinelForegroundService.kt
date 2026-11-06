@@ -31,7 +31,7 @@ class SentinelForegroundService : Service() {
     val paperStats = PaperStats()
     var settings = TradingSettings()
     var proEngineState = ProEngineState()
-    var focalSymbol = "BTCUSDT"
+    private var focalSymbol = "BTCUSDT"
 
     private val alertedGainers = ConcurrentHashMap<String, Long>()
 
@@ -301,7 +301,7 @@ class SentinelForegroundService : Service() {
         }
     }
 
-    fun setFocalSymbol(sym: String) {
+    fun selectFocalSymbol(sym: String) {
         val fullSym = if (sym.endsWith("USDT")) sym else "${sym}USDT"
         focalSymbol = fullSym
         updateProEngineState()
