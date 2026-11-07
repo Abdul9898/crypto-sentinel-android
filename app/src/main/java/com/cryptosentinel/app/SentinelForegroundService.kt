@@ -76,6 +76,53 @@ class SentinelForegroundService : Service() {
         } else {
             "⚡ LIQ SQUEEZE: $${String.format(Locale.US, "%,.0f", shortUsd)} Shorts"
         }
+    // Real-Time Open Interest (OI) Velocity Tracker (Rolling 15-Minute Window)
+    val coinOiHistory = ConcurrentHashMap<String, MutableList<OiPoint>>()
+    private val lastOiTradeTime = ConcurrentHashMap<String, Long>()
+
+    fun recordOiPoint(sym: String, oiUsd: Double, price: Double) {
+        if (oiUsd <= 0.0 || price <= 0.0) return
+        val history = coinOiHistory.computeIfAbsent(sym) { Collections.synchronizedList(mutableListOf()) }
+        val now = System.currentTimeMillis()
+        synchronized(history) {
+            val last = history.lastOrNull()
+            if (last == null || now - last.timestamp >= 3000L) {
+                history.add(OiPoint(now, oiUsd, price))
+                history.removeAll { now - it.timestamp > 15 * 60 * 1000L }
+            }
+        }
+    }
+
+    fun getCoinOiSummary(sym: String): Pair<Double, String> {
+        val history = coinOiHistory[sym] ?: return Pair(0.0, "")
+        val now = System.currentTimeMillis()
+        val curPoint = synchronized(history) { history.lastOrNull() } ?: return Pair(0.0, "")
+
+        val baselinePoint = synchronized(history) {
+            history.filter { now - it.timestamp in (3 * 60 * 1000L)..(7 * 60 * 1000L) }
+                .minByOrNull { it.timestamp }
+                ?: history.filter { now - it.timestamp >= 45_000L }.minByOrNull { it.timestamp }
+        } ?: return Pair(0.0, "")
+
+        if (baselinePoint.oiUsd <= 0.0) return Pair(0.0, "")
+        val oiDeltaPct = ((curPoint.oiUsd - baselinePoint.oiUsd) / baselinePoint.oiUsd) * 100.0
+        val oiUsdStr = when {
+            curPoint.oiUsd >= 1_000_000 -> String.format(Locale.US, "$%.1fM", curPoint.oiUsd / 1_000_000)
+            curPoint.oiUsd >= 1_000 -> String.format(Locale.US, "$%.0fK", curPoint.oiUsd / 1_000)
+            else -> String.format(Locale.US, "$%,.0f", curPoint.oiUsd)
+        }
+        val sign = if (oiDeltaPct >= 0) "+" else ""
+        val text = if (Math.abs(oiDeltaPct) >= 5.0) {
+            val label = when {
+                oiDeltaPct >= 15.0 -> "🔥 OI SURGE"
+                oiDeltaPct <= -10.0 -> "📉 OI DUMP"
+                else -> "OI"
+            }
+            "$label: $oiUsdStr ($sign${String.format(Locale.US, "%.1f", oiDeltaPct)}%)"
+        } else {
+            "OI: $oiUsdStr ($sign${String.format(Locale.US, "%.1f", oiDeltaPct)}%)"
+        }
+        return Pair(oiDeltaPct, text)
     }
 
     // Global 24h Ticker Metrics Cache (for BTC & ALL symbols)
@@ -352,6 +399,11 @@ class SentinelForegroundService : Service() {
                 // Fresh 1-hour price velocity %
                 val velocity1h = if (prev1h > 0) ((price - prev1h) / prev1h) * 100.0 else 0.0
 
+                val oiUsd = obj.get("openInterestValue")?.asString?.toDoubleOrNull() ?: 0.0
+                if (oiUsd > 0.0 && price > 0.0) {
+                    recordOiPoint(sym, oiUsd, price)
+                }
+
                 val gainer = GainerItem(cleanSym, price, p12h, turnover, velocity1h, p24h, high24h, low24h)
                 parsedAll.add(gainer)
                 allCoinMetrics[cleanSym] = gainer
@@ -439,6 +491,8 @@ class SentinelForegroundService : Service() {
 
         val volSpikes = getVolumeSpikeSummary(fullSym)
         val liqText = getRecentLiquidationSummary(fullSym)
+        val oiSummary = getCoinOiSummary(fullSym)
+        val oiText = oiSummary.second
 
         proEngineState = ProEngineState(
             symbol = cleanSym,
@@ -459,7 +513,8 @@ class SentinelForegroundService : Service() {
             lastSignalTime = proEngineState.lastSignalTime,
             lastSignalText = proEngineState.lastSignalText,
             volumeSpikesText = volSpikes,
-            liquidationText = liqText
+            liquidationText = liqText,
+            oiText = oiText
         )
     }
 
@@ -757,6 +812,19 @@ class SentinelForegroundService : Service() {
                     coin.price = obj.get("lastPrice").asDouble
                     checkOpenPositions(sym, coin.price)
                 }
+
+                val oiUsd = if (obj.has("openInterestValue")) {
+                    obj.get("openInterestValue").asString.toDoubleOrNull() ?: 0.0
+                } else if (obj.has("openInterest")) {
+                    val contracts = obj.get("openInterest").asString.toDoubleOrNull() ?: 0.0
+                    contracts * coin.price
+                } else 0.0
+
+                if (oiUsd > 0.0 && coin.price > 0.0) {
+                    recordOiPoint(sym, oiUsd, coin.price)
+                    evaluateOiSurge(sym, coin.price)
+                }
+
                 scheduleUiUpdate()
             } else if (topic.startsWith("publicTrade.")) {
                 val sym = topic.substringAfter("publicTrade.")
@@ -933,6 +1001,115 @@ class SentinelForegroundService : Service() {
             sendAlertNotification(
                 "⚡ Liq Hunter: $side $cleanSym",
                 "Entered $side after $$liqKStr $flushType @ $pStr (${settings.leverage}x)"
+            )
+            scheduleUiUpdate(force = true)
+        }
+    }
+
+    private fun evaluateOiSurge(sym: String, currentPrice: Double) {
+        val cleanSym = sym.replace("1000", "").replace("USDT", "")
+        if (cleanSym in NON_CRYPTO_SYMBOLS || sym.contains("STOCK")) return
+        if (currentPrice < 0.05) return
+
+        val history = coinOiHistory[sym] ?: return
+        val now = System.currentTimeMillis()
+        val lastTrigger = lastOiTradeTime[sym] ?: 0L
+        if (now - lastTrigger < 5 * 60 * 1000L) return // 5-minute cooldown per coin
+
+        val curPoint = synchronized(history) { history.lastOrNull() } ?: return
+        // Look back for baseline between 3 and 7 minutes ago, or minimum 45 seconds ago
+        val baselinePoint = synchronized(history) {
+            history.filter { now - it.timestamp in (3 * 60 * 1000L)..(7 * 60 * 1000L) }
+                .minByOrNull { it.timestamp }
+                ?: history.filter { now - it.timestamp >= 45_000L }.minByOrNull { it.timestamp }
+        } ?: return
+
+        if (baselinePoint.oiUsd <= 0.0 || baselinePoint.price <= 0.0) return
+
+        val oiDeltaPct = ((curPoint.oiUsd - baselinePoint.oiUsd) / baselinePoint.oiUsd) * 100.0
+        val priceDeltaPct = ((currentPrice - baselinePoint.price) / baselinePoint.price) * 100.0
+
+        var triggerSide: String? = null
+        var triggerReason: String? = null
+
+        // Setup 1: Stealth Long Accumulation (Whales loading Longs before pump)
+        // OI is surging (+15% or more) while price is flat (-1.5% to +2.5%)
+        if (oiDeltaPct >= 15.0 && priceDeltaPct in -1.5..2.5) {
+            triggerSide = "LONG"
+            triggerReason = "⚡ OI Surge (+${String.format(Locale.US, "%.1f", oiDeltaPct)}% Accumulation)"
+        }
+        // Setup 2: Short Squeeze Exhaustion (Fake Pump / Blow-Off Top)
+        // Price spiked up (+4% or more) but OI plummeted (-10% or more) as shorts were wiped out
+        else if (priceDeltaPct >= 4.0 && oiDeltaPct <= -10.0) {
+            triggerSide = "SHORT"
+            triggerReason = "⚡ Squeeze Exhaustion (OI ${String.format(Locale.US, "%.1f", oiDeltaPct)}% Drop)"
+        }
+        // Setup 3: Stealth Short Trap (Whales loading Shorts before dump)
+        // OI is surging (+15% or more) while price is flat (-2.5% to +1.0%) AND CVD is heavily negative
+        else if (oiDeltaPct >= 15.0 && priceDeltaPct in -2.5..1.0 && (trackedCoins[sym]?.cvd5m ?: 0.0) < -50_000.0) {
+            triggerSide = "SHORT"
+            triggerReason = "⚡ OI Short Trap (+${String.format(Locale.US, "%.1f", oiDeltaPct)}% Distribution)"
+        }
+
+        if (triggerSide == null || triggerReason == null) return
+
+        val totalOpen = synchronized(paperStats.openPositions) { paperStats.openPositions.size }
+        val hasOpenForSym = synchronized(paperStats.openPositions) {
+            paperStats.openPositions.any { it.symbol == sym }
+        }
+
+        if (totalOpen < 3 && !hasOpenForSym) {
+            lastOiTradeTime[sym] = now
+            val isLong = triggerSide == "LONG"
+            val side = triggerSide
+
+            val tierConfig = TierCalculator.getConfig(sym)
+            val targetProfit = if (settings.targetProfitUsd > 0.0) settings.targetProfitUsd else 2.0
+            val maxLoss = if (settings.maxLossUsd > 0.0) settings.maxLossUsd else 3.5
+            val notional = settings.positionSizeUsd * settings.leverage
+            val quickTpPct = if (notional > 0.0) (targetProfit / notional) * 100.0 else tierConfig.tpPct
+            val quickSlPct = if (notional > 0.0) (maxLoss / notional) * 100.0 else tierConfig.slPct
+            val tp = if (isLong) currentPrice * (1.0 + quickTpPct / 100.0) else currentPrice * (1.0 - quickTpPct / 100.0)
+            val sl = if (isLong) currentPrice * (1.0 - quickSlPct / 100.0) else currentPrice * (1.0 + quickSlPct / 100.0)
+
+            val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
+            val pStr = if (currentPrice < 1.0) String.format(Locale.US, "$%.4f", currentPrice) else String.format(Locale.US, "$%.2f", currentPrice)
+
+            val pos = PaperPosition(
+                symbol = sym,
+                side = side,
+                entryPrice = currentPrice,
+                sizeUsd = settings.positionSizeUsd,
+                leverage = settings.leverage,
+                tpPrice = tp,
+                slPrice = sl,
+                tpPct = quickTpPct,
+                slPct = quickSlPct,
+                openTimeStr = timeStr,
+                triggerReason = triggerReason,
+                openTimestamp = now
+            )
+            synchronized(paperStats.openPositions) {
+                paperStats.openPositions.add(pos)
+            }
+            StateManager.saveState(this, paperStats, tradeStories)
+
+            proEngineState = proEngineState.copy(
+                lastSignalTime = now,
+                lastSignalText = "$triggerReason: $cleanSym @ $pStr"
+            )
+
+            val alert = AlertItem(
+                timeStr = timeStr,
+                symbol = cleanSym,
+                type = "OI_SURGE_SIGNAL",
+                conviction = "HIGH",
+                message = "⚡ OI HUNTER $side: $cleanSym @ $pStr | $triggerReason"
+            )
+            addAlert(alert)
+            sendAlertNotification(
+                "⚡ OI Hunter: $side $cleanSym",
+                "$triggerReason @ $pStr (${settings.leverage}x)"
             )
             scheduleUiUpdate(force = true)
         }

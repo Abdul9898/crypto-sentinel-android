@@ -205,7 +205,14 @@ data class ProEngineState(
     val lastSignalTime: Long = 0L,
     val lastSignalText: String = "Monitoring 4-Timeframe Volume Spikes...",
     val volumeSpikesText: String = "",
-    val liquidationText: String = ""
+    val liquidationText: String = "",
+    val oiText: String = ""
+)
+
+data class OiPoint(
+    val timestamp: Long,
+    val oiUsd: Double,
+    val price: Double
 )
 
 

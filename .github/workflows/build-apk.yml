@@ -61,25 +61,26 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.3.0' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.3.0' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.4.0' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.4.0' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.3.0 (Live Liquidation Flush Hunter & Snapback Sniper)
+            ## ⚡ Crypto Sentinel Android v1.4.0 (Small-Cap Open Interest Velocity & Pre-Pump Radar)
             
-            ### 🚀 What's New in v1.3.0:
-            - ⚡ **Real-Time Bybit V5 Liquidation Stream (`allLiquidation.<symbol>`)**: Connected directly to Bybit's high-frequency liquidation order stream over WebSocket. Tracks rolling 45-second institutional and retail liquidations in real time.
-            - 🌊 **Long Flush Snapback Sniper**: Detects massive cascade dumping where leveraged retail longs are liquidated ($\ge \$80\text{K}$ on BTC/ETH, $\ge \$25\text{K}$ on mid-caps, $\ge \$15\text{K}$ on altcoin gainers). When forced selling exhausts, the bot snipes **LONG** to capture the sharp V-reversal bounce.
-            - 🎯 **Short Squeeze Exhaustion Sniper**: Detects violent squeeze spikes where trapped shorts are forced-liquidated. When artificial buy pressure dries up at the top wick, the bot snipes **SHORT** to ride the instant exhaustion drop.
-            - 📊 **Live Liquidation Status in Cockpit Card**: Real-time display on the focal card showing rolling liquidation volume and side (`⚡ LIQ FLUSH: $45,200 Longs` / `⚡ LIQ SQUEEZE: $38,000 Shorts`).
-            - 🛡️ **Full Risk Architecture**: Strict 3-minute cooldown per symbol, instant +$2.00 TP, -$3.50 hard SL, sub-cent (< $0.05) token filter, and max 3 simultaneous open positions.
-            - 🌊 **Multi-Timeframe Volume Surge Engine (1m, 5m, 15m, 1h)**: Fully preserved and working alongside the Liquidation Flush Hunter!
+            ### 🚀 What's New in v1.4.0:
+            - 👑 **Small-Cap Open Interest (OI) % Velocity Engine**: Built specifically for small coins, low-cap altcoins, and new movers. Tracks *relative percentage expansion* of Open Interest across Bybit linear perpetuals. Even a modest \$100K accumulation on a small coin triggers the radar!
+            - 🕵️‍♂️ **Stealth Accumulation Sniper (LONG)**: Detects when whales and market makers stealthily load long positions using passive limit orders (OI surges $\ge +15\%$ in $<5$ mins) while price remains calm ($-1.5\%$ to $+2.5\%$). Snipes **LONG** *before* the explosive breakout candle erupts.
+            - 🪤 **Short Squeeze Exhaustion Sniper (SHORT)**: Identifies fake trap pumps where price jumps $\ge +4\%$ but Open Interest plummets $\le -10\%$ (liquidating trapped shorts with zero fresh buyers). Snipes **SHORT** at the top wick peak.
+            - 📉 **Stealth Short Trap Sniper (SHORT)**: Detects hidden institutional short accumulation (OI surges $\ge +15\%$ with negative CVD) before the breakdown candle.
+            - 📊 **Live Real-Time OI Cockpit Display**: The focal cockpit card now displays real-time rolling OI value and velocity (e.g. `🔥 OI SURGE: $420K (+24.5%)`).
+            - ⚡ **Triple-Engine Synergy**: The 4-Timeframe Volume Surge Engine, the Live Liquidation Flush Hunter, and the OI Velocity Radar all run concurrently!
+            - 🛡️ **Risk Architecture**: Strict 5-minute symbol cooldown, instant +$2.00 TP, -$3.50 hard SL, +1.5% auto break-even lock, and sub-cent (< $0.05) protection.
             
             ### 🛠️ Stable Signing:
-            - 🔑 **Permanent Dual Signature Scheme (v1 + v2)**: Signed with permanent `sentinel.keystore`. Direct update over previous installations without uninstalling.
+            - 🔑 **Permanent Dual Signature Scheme (v1 + v2)**: Signed with permanent `sentinel.keystore`. Direct update over previous installations without losing data.
             
             ### 📥 Download
             Download `CryptoSentinel.apk` below and install directly on your phone:
-            https://github.com/Abdul9898/crypto-sentinel-android/releases/download/v1.3.0/CryptoSentinel.apk
+            https://github.com/Abdul9898/crypto-sentinel-android/releases/download/v1.4.0/CryptoSentinel.apk
           files: output/CryptoSentinel.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
