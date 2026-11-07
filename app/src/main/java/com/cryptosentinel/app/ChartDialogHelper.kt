@@ -89,8 +89,7 @@ object ChartDialogHelper {
                 val icon = if (s.isBullish) "🟢" else "🔴"
                 val dir = if (s.isBullish) "BULL" else "BEAR"
                 val color = if (s.isBullish) Color.parseColor("#00E676") else Color.parseColor("#FF3D71")
-                val difStr = String.format(Locale.US, "%+.4f", s.dif)
-                return Pair("$label: $icon $dir ($difStr)", color)
+                return Pair("$label: $icon $dir", color)
             }
 
             val b5 = renderBadge("5m", map?.get("5"))
@@ -323,18 +322,18 @@ object ChartDialogHelper {
                           ctx.save();
                           ctx.fillStyle = '#FFD700';
                           ctx.font = 'bold 9px monospace';
-                          ctx.fillText('MACD(5,13,1)', padLeft, candleViewportH + 4);
+                          ctx.fillText('MOMENTUM OSCILLATOR', padLeft, candleViewportH + 4);
 
                           ctx.fillStyle = '#00E5FF';
                           ctx.font = '9px monospace';
-                          ctx.fillText('DIF: ' + (lastPt.dif >= 0 ? '+' : '') + lastPt.dif.toFixed(6), padLeft + 75, candleViewportH + 4);
+                          ctx.fillText('ALPHA: ' + (lastPt.dif >= 0 ? '+' : '') + lastPt.dif.toFixed(6), padLeft + 120, candleViewportH + 4);
 
                           // Status Badge
-                          const badgeText = isCrossUp ? '🔥 0-CROSS LONG' : isCrossDown ? '🔥 0-CROSS SHORT' : (isBull ? '▲ BULLISH (5>13)' : '▼ BEARISH (5<13)');
+                          const badgeText = isCrossUp ? '🔥 MOMENTUM BREAKOUT LONG' : isCrossDown ? '🔥 MOMENTUM BREAKDOWN SHORT' : (isBull ? '▲ MOMENTUM BULLISH' : '▼ MOMENTUM BEARISH');
                           const badgeColor = isBull ? '#00E676' : '#FF3D71';
                           ctx.fillStyle = badgeColor;
                           ctx.font = 'bold 9px monospace';
-                          ctx.fillText(badgeText, padLeft + 185, candleViewportH + 4);
+                          ctx.fillText(badgeText, padLeft + 235, candleViewportH + 4);
                           ctx.restore();
                         }
                       }

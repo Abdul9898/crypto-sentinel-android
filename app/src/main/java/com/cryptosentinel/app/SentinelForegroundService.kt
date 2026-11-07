@@ -531,10 +531,12 @@ class SentinelForegroundService : Service() {
         if (totalOpen < 3 && !hasOpenForSym) {
             val tierConfig = TierCalculator.getConfig(sym)
             val targetProfit = if (settings.targetProfitUsd > 0.0) settings.targetProfitUsd else 2.0
+            val maxLoss = if (settings.maxLossUsd > 0.0) settings.maxLossUsd else 3.5
             val notional = settings.positionSizeUsd * settings.leverage
             val quickTpPct = if (notional > 0.0) (targetProfit / notional) * 100.0 else tierConfig.tpPct
+            val quickSlPct = if (notional > 0.0) (maxLoss / notional) * 100.0 else tierConfig.slPct
             val tp = if (isLong) currentPrice * (1.0 + quickTpPct / 100.0) else currentPrice * (1.0 - quickTpPct / 100.0)
-            val sl = if (isLong) currentPrice * (1.0 - tierConfig.slPct / 100.0) else currentPrice * (1.0 + tierConfig.slPct / 100.0)
+            val sl = if (isLong) currentPrice * (1.0 - quickSlPct / 100.0) else currentPrice * (1.0 + quickSlPct / 100.0)
 
             val pos = PaperPosition(
                 symbol = sym,
@@ -545,9 +547,9 @@ class SentinelForegroundService : Service() {
                 tpPrice = tp,
                 slPrice = sl,
                 tpPct = quickTpPct,
-                slPct = tierConfig.slPct,
+                slPct = quickSlPct,
                 openTimeStr = timeStr,
-                triggerReason = "MACD(5,13,1) $tfLabel Cross (${if (isLong) "Bullish > 0" else "Bearish < 0"})"
+                triggerReason = "Multi-Timeframe Trend Alignment ($tfLabel)"
             )
             synchronized(paperStats.openPositions) {
                 paperStats.openPositions.add(pos)
@@ -565,19 +567,17 @@ class SentinelForegroundService : Service() {
         val alert = AlertItem(
             timeStr = timeStr,
             symbol = cleanSym,
-            type = "MACD_TRADE",
+            type = "QUANT_SIGNAL",
             conviction = "HIGH",
-            message = "🎯 MACD $side ($tfLabel): $cleanSym @ $pStr | DIF: $difStr | 0-Cross"
+            message = "🎯 QUANT ALPHA $side ($tfLabel): $cleanSym @ $pStr | Momentum Cross"
         )
         addAlert(alert)
         sendAlertNotification(
-            "🎯 MACD Signal: $side $cleanSym ($tfLabel)",
-            "Fired on $tfLabel chart! DIF crossed ${if (isLong) "> 0 (Bullish)" else "< 0 (Bearish)"} @ $pStr (${settings.leverage}x)"
+            "🎯 Alpha Signal: $side $cleanSym ($tfLabel)",
+            "Institutional momentum alignment detected on $tfLabel chart @ $pStr (${settings.leverage}x)"
         )
         scheduleUiUpdate(force = true)
     }
-
-    fun executeRadarTrade(side: String) = executeManualTrade(side)
 
     fun executeManualTrade(side: String) {
         val targetSym = proEngineState.symbol.ifEmpty { "BTCUSDT" }
@@ -588,10 +588,12 @@ class SentinelForegroundService : Service() {
 
         val isLong = side == "LONG"
         val targetProfit = if (settings.targetProfitUsd > 0.0) settings.targetProfitUsd else 2.0
+        val maxLoss = if (settings.maxLossUsd > 0.0) settings.maxLossUsd else 3.5
         val notional = settings.positionSizeUsd * settings.leverage
         val quickTpPct = if (notional > 0.0) (targetProfit / notional) * 100.0 else tierConfig.tpPct
+        val quickSlPct = if (notional > 0.0) (maxLoss / notional) * 100.0 else tierConfig.slPct
         val tp = if (isLong) curPrice * (1.0 + quickTpPct / 100.0) else curPrice * (1.0 - quickTpPct / 100.0)
-        val sl = if (isLong) curPrice * (1.0 - tierConfig.slPct / 100.0) else curPrice * (1.0 + tierConfig.slPct / 100.0)
+        val sl = if (isLong) curPrice * (1.0 - quickSlPct / 100.0) else curPrice * (1.0 + quickSlPct / 100.0)
         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
 
         val pos = PaperPosition(
@@ -603,7 +605,7 @@ class SentinelForegroundService : Service() {
             tpPrice = tp,
             slPrice = sl,
             tpPct = quickTpPct,
-            slPct = tierConfig.slPct,
+            slPct = quickSlPct,
             openTimeStr = timeStr,
             triggerReason = "1-Tap PRO Execution ($side)"
         )
@@ -721,19 +723,37 @@ class SentinelForegroundService : Service() {
                         }
                     }
 
-                    // 4. Trigger Check: Quick Target Profit (e.g. $2.00) or TP price hit, while preserving SL
-                    val targetProfit = if (settings.targetProfitUsd > 0.0) settings.targetProfitUsd else 2.0
+                    // 4. Reverse Momentum Cut (Cuts immediately if short-term 5m trend flips against trade before loss grows)
                     val curPnlUsd = (diffPct / 100.0) * pos.sizeUsd * pos.leverage
+                    if (settings.isReverseMacdCutEnabled && curPnlUsd < -0.5) {
+                        val m5 = coinMacdStatus[pos.symbol]?.get("5")
+                        val isM5Reverse = if (isLong) {
+                            m5 != null && (!m5.isBullish || m5.isCrossDown)
+                        } else {
+                            m5 != null && (m5.isBullish || m5.isCrossUp)
+                        }
+                        if (isM5Reverse) {
+                            val revOutcome = String.format(Locale.US, "REVERSE (TREND FLIP -$%.2f)", Math.abs(curPnlUsd))
+                            toClose.add(Triple(pos, revOutcome, currentPrice))
+                            it.remove()
+                            continue
+                        }
+                    }
+
+                    // 5. Trigger Check: Quick Target Profit (e.g. $2.00) or TP price hit, and Hard Max Loss / SL hit
+                    val targetProfit = if (settings.targetProfitUsd > 0.0) settings.targetProfitUsd else 2.0
+                    val maxLoss = if (settings.maxLossUsd > 0.0) settings.maxLossUsd else 3.5
                     val isProfitHit = curPnlUsd >= targetProfit || (if (isLong) currentPrice >= pos.tpPrice else currentPrice <= pos.tpPrice)
+                    val isLossHit = curPnlUsd <= -maxLoss || (if (isLong) currentPrice <= pos.slPrice else currentPrice >= pos.slPrice)
 
                     if (isProfitHit) {
                         val tpOutcome = if (Math.abs(targetProfit - 2.0) < 0.05) "WIN (+$2 TP)" else String.format(Locale.US, "WIN (+%.1f$ TP)", targetProfit)
                         toClose.add(Triple(pos, tpOutcome, currentPrice))
                         it.remove()
-                    } else if (if (isLong) currentPrice <= pos.slPrice else currentPrice >= pos.slPrice) {
+                    } else if (isLossHit) {
                         val outcome = if (pos.isTrailingActive && ((isLong && currentPrice > pos.entryPrice) || (!isLong && currentPrice < pos.entryPrice))) "WIN (TRAIL)"
                                       else if (pos.isBreakEvenSet && ((isLong && currentPrice >= pos.entryPrice * 0.999) || (!isLong && currentPrice <= pos.entryPrice * 1.001))) "BREAK-EVEN"
-                                      else "LOSS (SL)"
+                                      else String.format(Locale.US, "LOSS (-$%.2f SL)", Math.abs(curPnlUsd))
                         toClose.add(Triple(pos, outcome, currentPrice))
                         it.remove()
                     }
@@ -766,6 +786,7 @@ class SentinelForegroundService : Service() {
                 outcome == "WIN (TRAIL)" -> "🚀"
                 outcome.startsWith("WIN") -> "🏆"
                 outcome == "BREAK-EVEN" -> "🛡️"
+                outcome.startsWith("REVERSE") -> "⚡"
                 else -> "🛑"
             }
 

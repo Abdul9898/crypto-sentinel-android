@@ -61,23 +61,30 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.1.9' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.1.9' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.2.0' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.2.0' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.1.9 (Spacious UI & Crypto Metrics Engine)
+            ## ⚡ Crypto Sentinel Android v1.2.0 (Dual Stop-Loss Protection & Quant Alpha Cockpit)
             
-            ### 🚀 What's New in v1.1.9:
-            - 📱 **More Space & Full-Screen Scroll**: Wrapped the entire dashboard in a smooth `NestedScrollView` with compact card designs. Active positions, PRO cards, breakout gainers, and signal feeds now fit with ample breathing room without clutter or clipping on any screen size.
-            - 🚫 **Closed-Market Stock Token Blacklist**: Excluded traditional US stock/ETF tokens (`UVXY`, `MCD`, `ASTS`, etc.) that freeze outside Wall Street hours. Only authentic 24/7 liquid crypto pairs are scanned and traded.
-            - 💧 **24h Turnover Liquidity Gate ($5,000,000+ USD)**: Filtered out dead, illiquid micro-caps (like `ARIA`) with near-zero orderbook depth. Only tokens with millions in active hourly volume are traded.
-            - 📊 **Real-Time Crypto Metrics**: Live 24h Turnover (Volume in Billions/Millions), 24h High/Low range, and 1-hour Price Velocity are now dynamically calculated and displayed on the PRO card.
-            - ⚡ **Flatline Momentum Gate**: Prevents triggering auto-trades during dead 0.00% velocity range compressions—positions only enter when price momentum is genuinely active.
+            ### 🚀 What's New in v1.2.0:
+            - 🛑 **Dual-Engine Stop Loss Protection (Option 3)**:
+              - **Max Dollar Loss Cap**: Losses are hard-capped at a tight USD amount (default `$3.50`, fully configurable in Settings). A single trade can **never lose $40+ again**!
+              - **Auto Reversal Momentum Cut**: If a trade is in negative territory and the short-term trend flips against the position, the app cuts the trade immediately at market price before the loss expands.
+            - ⚡ **QUANT ALPHA PRO Cockpit (Replacing Old Radar)**:
+              - Completely replaced old radars with the brand new **Quant Alpha Momentum Cockpit**.
+              - Real-time institutional multi-timeframe trend alignment (5M, 15M, 1H), 1h price velocity, 24h turnover volume, and 1-tap execution.
+            - 🔒 **Proprietary Signal Stealth**:
+              - Completely removed all internal indicator names, formulas, and parameters (MACD, DIF, settings) from UI cards, notifications, alerts, and charts.
+              - Live charts now feature clean **Momentum Oscillator** and **Alpha Breakout** visualizations.
+            - 📱 **Spacious Dashboard & Crypto Metrics**:
+              - Full nested scroll layout with dedicated individual position cards and liquid crypto volume filters.
             
             ### 🛠️ Stable Signing:
-            - 🔑 **Dual Signature Schemes (v1 + v2)**: Permanent signed release with `sentinel.keystore`. Installs seamlessly over previous versions without signature conflicts.
+            - 🔑 **Dual Signature Schemes (v1 + v2)**: Permanent signed release with `sentinel.keystore`. Installs seamlessly over previous versions.
             
             ### 📥 Download
-            Download `CryptoSentinel.apk` below and install directly on your phone.
+            Download `CryptoSentinel.apk` below and install directly on your phone:
+            `https://github.com/Abdul9898/crypto-sentinel-android/releases/download/v1.2.0/CryptoSentinel.apk`
           files: output/CryptoSentinel.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

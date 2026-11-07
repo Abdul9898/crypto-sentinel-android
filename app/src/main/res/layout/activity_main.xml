@@ -105,7 +105,7 @@
                         android:layout_marginTop="4dp"
                         android:background="#151A22"
                         android:padding="6dp"
-                        android:text="⚡ Auto-Trading Active (Scanning 5m, 15m, 1h MACD)..."
+                        android:text="⚡ Auto-Trading Active (Multi-Timeframe Trend Scanner)..."
                         android:textColor="@color/primary_cyan"
                         android:textSize="10sp" />
 
@@ -120,7 +120,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- PRO MACD Triple-Timeframe Engine Card -->
+            <!-- QUANT ALPHA COCKPIT & MOMENTUM MATRIX (NEW ENGINE) -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cardProEngine"
                 android:layout_width="match_parent"
@@ -148,7 +148,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="⚡ PRO MACD(5,13,1): BTC"
+                            android:text="⚡ QUANT ALPHA PRO: BTC"
                             android:textColor="@color/primary_cyan"
                             android:textSize="12sp"
                             android:textStyle="bold" />
@@ -168,7 +168,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="1h Vel: 0.00% | Vol: $0M | 🚀 Monitoring 3-TF MACD..."
+                        android:text="1h Vel: 0.00% | Vol: $0M | 🚀 Multi-Timeframe Trend Active"
                         android:textColor="@color/text_dim"
                         android:textSize="10sp" />
 
@@ -219,7 +219,7 @@
                             android:textStyle="bold" />
                     </LinearLayout>
 
-                    <!-- Action Buttons: 3-TF Chart Dialog & 1-Tap Execution -->
+                    <!-- Action Buttons: Pro Chart Dialog & 1-Tap Execution -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -236,7 +236,7 @@
                             android:insetTop="0dp"
                             android:insetBottom="0dp"
                             android:padding="0dp"
-                            android:text="📊 3-TF CHART"
+                            android:text="📊 PRO CHART"
                             android:textColor="@color/primary_cyan"
                             android:textSize="10sp"
                             android:textStyle="bold"
@@ -323,7 +323,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="5dp"
                 android:layout_marginBottom="2dp"
-                android:text="WATCHLIST (TAP FOR 3-TF MACD CHART)"
+                android:text="WATCHLIST (TAP FOR PRO LIVE CHART)"
                 android:textColor="@color/text_dim"
                 android:textSize="10sp"
                 android:textStyle="bold" />

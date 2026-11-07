@@ -124,6 +124,36 @@
                     android:textColor="@color/text_dim"
                     android:textSize="11sp" />
 
+                <!-- Quick Max Stop Loss Target -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="🛑 Max Stop Loss (Target USD Loss Cap)"
+                    android:textColor="@color/neon_red"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <EditText
+                    android:id="@+id/etMaxLoss"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="4dp"
+                    android:background="@color/bg_dark"
+                    android:inputType="numberDecimal"
+                    android:paddingHorizontal="10dp"
+                    android:text="3.5"
+                    android:textColor="@color/neon_red"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Hard loss cap: immediately cuts position if loss reaches this amount. Never lose $40+ again!"
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+
                 <!-- Leverage Selector -->
                 <TextView
                     android:layout_width="wrap_content"
@@ -227,12 +257,30 @@
                     android:textSize="11sp"
                     android:textStyle="bold" />
 
+                <!-- Auto Reversal Cut Switch -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchReverseMacdCut"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:checked="true"
+                    android:text="⚡ Auto Reversal Momentum Cut"
+                    android:textColor="@color/text_white"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Exits position immediately if short-term trend flips against you before loss grows"
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+
                 <!-- Auto Break-Even Switch -->
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/switchBreakEven"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="8dp"
                     android:checked="true"
                     android:text="Auto Break-Even at +1.5%"
                     android:textColor="@color/text_white"

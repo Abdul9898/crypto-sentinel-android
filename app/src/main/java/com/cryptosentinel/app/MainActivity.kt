@@ -97,8 +97,9 @@ class MainActivity : AppCompatActivity() {
             val isLong = gainer.velocity1hPct >= 0
             val notional = s.settings.positionSizeUsd * s.settings.leverage
             val quickTpPct = if (notional > 0.0) (s.settings.targetProfitUsd / notional) * 100.0 else tier.tpPct
+            val quickSlPct = if (notional > 0.0) (s.settings.maxLossUsd / notional) * 100.0 else tier.slPct
             val tpPrice = if (isLong) curP * (1.0 + quickTpPct / 100.0) else curP * (1.0 - quickTpPct / 100.0)
-            val slPrice = if (isLong) curP * (1.0 - tier.slPct / 100.0) else curP * (1.0 + tier.slPct / 100.0)
+            val slPrice = if (isLong) curP * (1.0 - quickSlPct / 100.0) else curP * (1.0 + quickSlPct / 100.0)
             ChartDialogHelper.showChart(
                 context = this,
                 symbol = gainer.symbol,
@@ -107,7 +108,7 @@ class MainActivity : AppCompatActivity() {
                 tpPrice = tpPrice,
                 slPrice = slPrice,
                 tpPct = quickTpPct,
-                slPct = tier.slPct,
+                slPct = quickSlPct,
                 positionId = null,
                 statusNote = "12h: ${String.format(Locale.US, "%+.1f%%", gainer.change12hPct)}",
                 onClosePosition = null,
@@ -187,8 +188,9 @@ class MainActivity : AppCompatActivity() {
             val isLong = coin.cvd5m >= 0
             val notional = s.settings.positionSizeUsd * s.settings.leverage
             val quickTpPct = if (notional > 0.0) (s.settings.targetProfitUsd / notional) * 100.0 else tier.tpPct
+            val quickSlPct = if (notional > 0.0) (s.settings.maxLossUsd / notional) * 100.0 else tier.slPct
             val tpPrice = if (isLong) curP * (1.0 + quickTpPct / 100.0) else curP * (1.0 - quickTpPct / 100.0)
-            val slPrice = if (isLong) curP * (1.0 - tier.slPct / 100.0) else curP * (1.0 + tier.slPct / 100.0)
+            val slPrice = if (isLong) curP * (1.0 - quickSlPct / 100.0) else curP * (1.0 + quickSlPct / 100.0)
             ChartDialogHelper.showChart(
                 context = this,
                 symbol = coin.symbol,
@@ -197,7 +199,7 @@ class MainActivity : AppCompatActivity() {
                 tpPrice = tpPrice,
                 slPrice = slPrice,
                 tpPct = quickTpPct,
-                slPct = tier.slPct,
+                slPct = quickSlPct,
                 positionId = null,
                 statusNote = "CVD: ${String.format(Locale.US, "$%,.0f", coin.cvd5m)}",
                 onClosePosition = null,
@@ -218,7 +220,7 @@ class MainActivity : AppCompatActivity() {
             showSettingsDialog()
         }
 
-        // PRO MACD Engine Buttons: 3-TF Chart and 1-Tap Execution
+        // PRO MACD Engine Buttons: 3-Timeframe Chart and 1-Tap Execution
         binding.btnProChart.setOnClickListener {
             val s = sentinelService ?: return@setOnClickListener
             val targetSym = s.proEngineState.symbol.ifEmpty { "BTCUSDT" }
@@ -228,8 +230,9 @@ class MainActivity : AppCompatActivity() {
             val isBullish = s.proEngineState.macd15mBias == "BULLISH"
             val notional = s.settings.positionSizeUsd * s.settings.leverage
             val quickTpPct = if (notional > 0.0) (s.settings.targetProfitUsd / notional) * 100.0 else tier.tpPct
+            val quickSlPct = if (notional > 0.0) (s.settings.maxLossUsd / notional) * 100.0 else tier.slPct
             val tpPrice = if (isBullish) curP * (1.0 + quickTpPct / 100.0) else curP * (1.0 - quickTpPct / 100.0)
-            val slPrice = if (isBullish) curP * (1.0 - tier.slPct / 100.0) else curP * (1.0 + tier.slPct / 100.0)
+            val slPrice = if (isBullish) curP * (1.0 - quickSlPct / 100.0) else curP * (1.0 + quickSlPct / 100.0)
             ChartDialogHelper.showChart(
                 context = this,
                 symbol = targetSym,
@@ -238,9 +241,9 @@ class MainActivity : AppCompatActivity() {
                 tpPrice = tpPrice,
                 slPrice = slPrice,
                 tpPct = quickTpPct,
-                slPct = tier.slPct,
+                slPct = quickSlPct,
                 positionId = null,
-                statusNote = "PRO MACD: ${s.proEngineState.macd15mBias}",
+                statusNote = "TREND: ${s.proEngineState.macd15mBias}",
                 onClosePosition = null,
                 macdStatusProvider = { sym -> s.coinMacdStatus[sym] },
                 candlesProvider = { interval, cb -> s.fetchKlines(fullSym, interval, cb) }
@@ -279,6 +282,8 @@ class MainActivity : AppCompatActivity() {
         val etStartingBalance: EditText = view.findViewById(R.id.etStartingBalance)
         val etPositionSize: EditText = view.findViewById(R.id.etPositionSize)
         val etTargetProfit: EditText = view.findViewById(R.id.etTargetProfit)
+        val etMaxLoss: EditText = view.findViewById(R.id.etMaxLoss)
+        val switchReverseMacdCut: SwitchMaterial = view.findViewById(R.id.switchReverseMacdCut)
         val switchBreakEven: SwitchMaterial = view.findViewById(R.id.switchBreakEven)
         val switchTrailing: SwitchMaterial = view.findViewById(R.id.switchTrailing)
         val btnResetPaper: MaterialButton = view.findViewById(R.id.btnResetPaper)
@@ -294,6 +299,8 @@ class MainActivity : AppCompatActivity() {
         etStartingBalance.setText(String.format(Locale.US, "%.0f", current.startingBalance))
         etPositionSize.setText(String.format(Locale.US, "%.0f", current.positionSizeUsd))
         etTargetProfit.setText(String.format(Locale.US, "%.1f", current.targetProfitUsd))
+        etMaxLoss.setText(String.format(Locale.US, "%.1f", current.maxLossUsd))
+        switchReverseMacdCut.isChecked = current.isReverseMacdCutEnabled
         switchBreakEven.isChecked = current.isBreakEvenEnabled
         switchTrailing.isChecked = current.isTrailingEnabled
 
@@ -344,16 +351,19 @@ class MainActivity : AppCompatActivity() {
             val startBal = etStartingBalance.text.toString().toDoubleOrNull() ?: current.startingBalance
             val posSize = etPositionSize.text.toString().toDoubleOrNull() ?: current.positionSizeUsd
             val targetProfit = etTargetProfit.text.toString().toDoubleOrNull() ?: current.targetProfitUsd
+            val maxLoss = etMaxLoss.text.toString().toDoubleOrNull() ?: current.maxLossUsd
             val newSettings = current.copy(
                 startingBalance = startBal,
                 positionSizeUsd = posSize,
                 targetProfitUsd = targetProfit,
+                maxLossUsd = maxLoss,
                 leverage = selectedLev,
+                isReverseMacdCutEnabled = switchReverseMacdCut.isChecked,
                 isBreakEvenEnabled = switchBreakEven.isChecked,
                 isTrailingEnabled = switchTrailing.isChecked
             )
             s.updateSettings(newSettings)
-            Toast.makeText(this, "Trading Settings Saved! (Quick TP: $${String.format(Locale.US, "%.2f", targetProfit)} | ${selectedLev}x)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Trading Settings Saved! (TP: $${String.format(Locale.US, "%.2f", targetProfit)} | Max SL: $${String.format(Locale.US, "%.2f", maxLoss)})", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
 
@@ -416,10 +426,10 @@ class MainActivity : AppCompatActivity() {
             binding.tvPaperPnl.text = String.format(Locale.US, "💼 PAPER PnL: %s$%,.2f (%+.1f%%)", pnlSign, stats.pnlUsd, stats.pnlPct)
             binding.tvPaperWinRate.text = String.format(Locale.US, "Win Rate: %.1f%% (%dW / %dL) | Capital: $%,.0f | Open: %d", stats.winRate, stats.wins, stats.losses, stats.balance, stats.openCount)
 
-            // 6. Update PRO MACD Triple-Timeframe Engine Card
+            // 6. Update QUANT ALPHA Cockpit Card
             val pro = s.proEngineState
             val symClean = pro.symbol.ifEmpty { "BTC" }
-            binding.tvProSymbol.text = "⚡ PRO MACD(5,13,1): $symClean"
+            binding.tvProSymbol.text = "⚡ QUANT ALPHA PRO: $symClean"
 
             val pStr = if (pro.currentPrice < 1.0) String.format(Locale.US, "$%.4f", pro.currentPrice) else String.format(Locale.US, "$%,.2f", pro.currentPrice)
             val sign12h = if (pro.change12hPct >= 0) "+" else ""
@@ -469,7 +479,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 binding.rvActivePositions.visibility = View.GONE
                 binding.tvPositionsEmpty.visibility = View.VISIBLE
-                binding.tvPositionsEmpty.text = "⚡ Triple-TF MACD(5,13,1) Auto-Trading Active (${s.settings.leverage}x Leverage | 5m, 15m, 1h Zero-Cross Scan)..."
+                binding.tvPositionsEmpty.text = "⚡ Algorithmic Auto-Trading Active (${s.settings.leverage}x Leverage | Multi-Timeframe Trend Scanner)..."
                 if (activePositionsList.isNotEmpty()) {
                     activePositionsList.clear()
                     activePositionAdapter.notifyDataSetChanged()

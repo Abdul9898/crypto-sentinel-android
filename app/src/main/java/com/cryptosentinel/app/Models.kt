@@ -148,16 +148,12 @@ data class TradeStory(
     val slPrice: Double
 )
 
-data class DepthRadarState(
+data class MarketMatrixState(
     val symbol: String = "",
-    val bidVolumeUsd: Double = 0.0,
-    val askVolumeUsd: Double = 0.0,
-    val bidRatioPct: Double = 50.0,
-    val topBidWallPrice: Double = 0.0,
-    val topBidWallUsd: Double = 0.0,
-    val topAskWallPrice: Double = 0.0,
-    val topAskWallUsd: Double = 0.0,
-    val status: String = "Neutral"
+    val regime: String = "ACCELERATING",
+    val volatilityScore: String = "OPTIMAL",
+    val trendAlignment: String = "ALIGNED",
+    val buyPressurePct: Double = 50.0
 )
 
 data class TradingSettings(
@@ -165,6 +161,8 @@ data class TradingSettings(
     var positionSizeUsd: Double = 500.0,
     var leverage: Int = 5,
     var targetProfitUsd: Double = 2.0,
+    var maxLossUsd: Double = 3.5,
+    var isReverseMacdCutEnabled: Boolean = true,
     var isBreakEvenEnabled: Boolean = true,
     var beTriggerPct: Double = 1.5,
     var isTrailingEnabled: Boolean = true,
@@ -184,7 +182,7 @@ data class ProEngineState(
     val macd15mBias: String = "NEUTRAL",
     val macd1hBias: String = "NEUTRAL",
     val lastSignalTime: Long = 0L,
-    val lastSignalText: String = "Monitoring 3-TF MACD..."
+    val lastSignalText: String = "Monitoring Multi-Timeframe Trend..."
 )
 
 
