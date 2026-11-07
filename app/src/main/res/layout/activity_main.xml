@@ -172,6 +172,20 @@
                         android:textColor="@color/text_dim"
                         android:textSize="10sp" />
 
+                    <TextView
+                        android:id="@+id/tvProWhaleRadar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="3dp"
+                        android:background="@drawable/bg_pro_badge_neutral"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="8dp"
+                        android:paddingVertical="4dp"
+                        android:text="⚡ WHALE RADAR: OI $0 (0.0% 5m) · Order Flow Balanced"
+                        android:textColor="@color/primary_cyan"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+
                     <!-- Color-Coded 4-TF Badges (1m, 5m, 15m, 1h) -->
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -311,18 +325,42 @@
                 android:nestedScrollingEnabled="false"
                 android:visibility="gone" />
 
-            <!-- Top Gainers Header -->
-            <TextView
-                android:layout_width="wrap_content"
+            <!-- Pre-Pump & Pre-Dump Whale Radar Header & Tabs -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:layout_marginBottom="2dp"
-                android:text="⚡ FRESH BREAKOUT IGNITIONS (EARLY MOVERS)"
-                android:textColor="@color/primary_cyan"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="3dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-            <!-- Top Gainers Horizontal List -->
+                <TextView
+                    android:id="@+id/tvRadarTabPrePump"
+                    android:layout_width="wrap_content"
+                    android:layout_height="24dp"
+                    android:background="@drawable/bg_pro_badge_cyan"
+                    android:gravity="center"
+                    android:paddingHorizontal="8dp"
+                    android:text="🟢 PRE-PUMP ACCUMULATION"
+                    android:textColor="@color/primary_cyan"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvRadarTabPreDump"
+                    android:layout_width="wrap_content"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_pro_badge_neutral"
+                    android:gravity="center"
+                    android:paddingHorizontal="8dp"
+                    android:text="🔴 PRE-DUMP EXHAUSTION"
+                    android:textColor="@color/text_dim"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Pre-Pump / Pre-Dump Horizontal List -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rvGainers"
                 android:layout_width="match_parent"
@@ -334,12 +372,65 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
+                android:layout_marginTop="6dp"
                 android:layout_marginBottom="2dp"
                 android:text="WATCHLIST (TAP FOR PRO LIVE CHART)"
                 android:textColor="@color/text_dim"
                 android:textSize="10sp"
                 android:textStyle="bold" />
+
+            <!-- Watchlist Column Headers -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="2dp">
+
+                <TextView
+                    android:layout_width="60dp"
+                    android:layout_height="wrap_content"
+                    android:text="COIN"
+                    android:textColor="@color/text_dim"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="PRICE"
+                    android:textColor="@color/text_dim"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="75dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:text="CVD (5M)"
+                    android:textColor="@color/text_dim"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="55dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:text="BUY%"
+                    android:textColor="@color/text_dim"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="60dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:text="OI DELTA"
+                    android:textColor="@color/text_dim"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
             <!-- Coin List -->
             <androidx.recyclerview.widget.RecyclerView

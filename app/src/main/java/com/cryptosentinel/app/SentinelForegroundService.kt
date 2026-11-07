@@ -405,8 +405,23 @@ class SentinelForegroundService : Service() {
                 if (oiUsd > 0.0 && price > 0.0) {
                     recordOiPoint(sym, oiUsd, price)
                 }
+                val oiPair = getCoinOiSummary(sym)
+                val oiDelta = oiPair.first
+                val isPump = oiDelta >= 0.0
 
-                val gainer = GainerItem(cleanSym, price, p12h, turnover, velocity1h, p24h, high24h, low24h)
+                val gainer = GainerItem(
+                    symbol = cleanSym,
+                    price = price,
+                    change12hPct = p12h,
+                    turnoverUsd = turnover,
+                    velocity1hPct = velocity1h,
+                    change24hPct = p24h,
+                    high24h = high24h,
+                    low24h = low24h,
+                    oiUsd = oiUsd,
+                    oiDeltaPct = oiDelta,
+                    isPrePump = isPump
+                )
                 parsedAll.add(gainer)
                 allCoinMetrics[cleanSym] = gainer
                 allCoinMetrics[sym] = gainer
@@ -824,6 +839,8 @@ class SentinelForegroundService : Service() {
 
                 if (oiUsd > 0.0 && coin.price > 0.0) {
                     recordOiPoint(sym, oiUsd, coin.price)
+                    val oiPair = getCoinOiSummary(sym)
+                    coin.oiDeltaPct = oiPair.first
                     evaluateOiSurge(sym, coin.price)
                 }
 

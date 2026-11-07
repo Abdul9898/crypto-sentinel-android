@@ -43,7 +43,13 @@ class CoinAdapter(
 
         holder.tvCvd.setTextColor(if (cvd > 0) Color.parseColor("#00E676") else if (cvd < 0) Color.parseColor("#FF3D71") else Color.WHITE)
         holder.tvBuyRatio.text = String.format(java.util.Locale.US, "%.1f%%", coin.buyRatio)
-        holder.tvOi.text = String.format(java.util.Locale.US, "%+.2f%%", coin.oiDeltaPct)
+        val oi = coin.oiDeltaPct
+        holder.tvOi.text = if (Math.abs(oi) >= 0.05) String.format(java.util.Locale.US, "%+.1f%%", oi) else "0.0%"
+        holder.tvOi.setTextColor(
+            if (oi >= 5.0) Color.parseColor("#00E676")
+            else if (oi <= -5.0) Color.parseColor("#FF3D71")
+            else Color.parseColor("#888888")
+        )
 
         holder.itemView.setOnClickListener {
             onItemClick?.invoke(coin)
@@ -88,6 +94,7 @@ class GainerAdapter(
 
     class GainerViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val tvSymbol: TextView = view.findViewById(R.id.tvGainerSymbol)
+        val tvBadge: TextView = view.findViewById(R.id.tvGainerBadge)
         val tvPrice: TextView = view.findViewById(R.id.tvGainerPrice)
         val tvChange: TextView = view.findViewById(R.id.tvGainerChange)
         val tvVol: TextView = view.findViewById(R.id.tvGainerVol)
@@ -101,27 +108,39 @@ class GainerAdapter(
     override fun onBindViewHolder(holder: GainerViewHolder, position: Int) {
         val gainer = gainers[position]
         holder.tvSymbol.text = gainer.symbol
-        holder.tvPrice.text = if (gainer.price >= 100) String.format("$%,.1f", gainer.price)
-        else if (gainer.price >= 1) String.format("$%,.2f", gainer.price)
-        else String.format("$%,.4f", gainer.price)
+        holder.tvPrice.text = if (gainer.price >= 100) String.format(java.util.Locale.US, "$%,.1f", gainer.price)
+        else if (gainer.price >= 1) String.format(java.util.Locale.US, "$%,.2f", gainer.price)
+        else String.format(java.util.Locale.US, "$%,.4f", gainer.price)
 
-        val vel = gainer.velocity1hPct
-        if (vel != 0.0) {
-            val sign = if (vel >= 0) "+" else ""
-            holder.tvChange.text = String.format(java.util.Locale.US, "%s%.1f%% 1h", sign, vel)
-            holder.tvChange.setTextColor(if (vel >= 0) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
-
-            val sign12 = if (gainer.change12hPct >= 0) "+" else ""
-            holder.tvVol.text = String.format(java.util.Locale.US, "12h %s%.0f%%", sign12, gainer.change12hPct)
+        val isPump = gainer.isPrePump
+        if (isPump) {
+            holder.tvBadge.text = "🟢 PRE-PUMP"
+            holder.tvBadge.setTextColor(Color.parseColor("#00E676"))
         } else {
-            val sign = if (gainer.change12hPct >= 0) "+" else ""
-            holder.tvChange.text = String.format("%s%.1f%%", sign, gainer.change12hPct)
-            holder.tvChange.setTextColor(if (gainer.change12hPct >= 0) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
-
-            val volFormatted = if (gainer.turnoverUsd >= 1_000_000) String.format("Vol: $%.1fM", gainer.turnoverUsd / 1_000_000)
-            else String.format("Vol: $%.0fK", gainer.turnoverUsd / 1_000)
-            holder.tvVol.text = volFormatted
+            holder.tvBadge.text = "🔴 PRE-DUMP"
+            holder.tvBadge.setTextColor(Color.parseColor("#FF3D71"))
         }
+
+        val oiDelta = gainer.oiDeltaPct
+        val sign = if (oiDelta >= 0) "+" else ""
+        if (Math.abs(oiDelta) >= 0.1) {
+            holder.tvChange.text = if (isPump) "🔥 $sign${String.format(java.util.Locale.US, "%.1f%%", oiDelta)} OI"
+                                   else "⚠️ $sign${String.format(java.util.Locale.US, "%.1f%%", oiDelta)} OI"
+        } else {
+            val velSign = if (gainer.velocity1hPct >= 0) "+" else ""
+            holder.tvChange.text = String.format(java.util.Locale.US, "%s%.1f%% 1h", velSign, gainer.velocity1hPct)
+        }
+        holder.tvChange.setTextColor(if (isPump) Color.parseColor("#00E676") else Color.parseColor("#FF3D71"))
+
+        val oiUsdStr = when {
+            gainer.oiUsd >= 1_000_000 -> String.format(java.util.Locale.US, "$%.1fM", gainer.oiUsd / 1_000_000)
+            gainer.oiUsd >= 1_000 -> String.format(java.util.Locale.US, "$%.0fK", gainer.oiUsd / 1_000)
+            gainer.oiUsd > 0 -> String.format(java.util.Locale.US, "$%,.0f", gainer.oiUsd)
+            else -> ""
+        }
+        val oiPrefix = if (oiUsdStr.isNotEmpty()) "OI $oiUsdStr | " else ""
+        val vSign = if (gainer.velocity1hPct >= 0) "+" else ""
+        holder.tvVol.text = String.format(java.util.Locale.US, "%s%s%.1f%% 1h", oiPrefix, vSign, gainer.velocity1hPct)
 
         holder.itemView.setOnClickListener {
             onItemClick?.invoke(gainer)

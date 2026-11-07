@@ -61,26 +61,26 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.4.0' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.4.0' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.4.1' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.4.1' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.4.0 (Small-Cap Open Interest Velocity & Pre-Pump Radar)
+            ## ⚡ Crypto Sentinel Android v1.4.1 (Visual Pre-Pump & Pre-Dump Whale Radar + Color-Coded Watchlist)
             
-            ### 🚀 What's New in v1.4.0:
-            - 👑 **Small-Cap Open Interest (OI) % Velocity Engine**: Built specifically for small coins, low-cap altcoins, and new movers. Tracks *relative percentage expansion* of Open Interest across Bybit linear perpetuals. Even a modest \$100K accumulation on a small coin triggers the radar!
-            - 🕵️‍♂️ **Stealth Accumulation Sniper (LONG)**: Detects when whales and market makers stealthily load long positions using passive limit orders (OI surges $\ge +15\%$ in $<5$ mins) while price remains calm ($-1.5\%$ to $+2.5\%$). Snipes **LONG** *before* the explosive breakout candle erupts.
-            - 🪤 **Short Squeeze Exhaustion Sniper (SHORT)**: Identifies fake trap pumps where price jumps $\ge +4\%$ but Open Interest plummets $\le -10\%$ (liquidating trapped shorts with zero fresh buyers). Snipes **SHORT** at the top wick peak.
-            - 📉 **Stealth Short Trap Sniper (SHORT)**: Detects hidden institutional short accumulation (OI surges $\ge +15\%$ with negative CVD) before the breakdown candle.
-            - 📊 **Live Real-Time OI Cockpit Display**: The focal cockpit card now displays real-time rolling OI value and velocity (e.g. `🔥 OI SURGE: $420K (+24.5%)`).
-            - ⚡ **Triple-Engine Synergy**: The 4-Timeframe Volume Surge Engine, the Live Liquidation Flush Hunter, and the OI Velocity Radar all run concurrently!
-            - 🛡️ **Risk Architecture**: Strict 5-minute symbol cooldown, instant +$2.00 TP, -$3.50 hard SL, +1.5% auto break-even lock, and sub-cent (< $0.05) protection.
+            ### 🚀 What's New in v1.4.1:
+            - 🟢 **Pre-Pump & 🔴 Pre-Dump Filter Tabs**: Instant toggle buttons `[ 🟢 PRE-PUMP ACCUMULATION ]` and `[ 🔴 PRE-DUMP EXHAUSTION ]` to quickly isolate coins where whales are quietly loading vs coins suffering squeeze collapse.
+            - 🏷️ **Visual Radar Cards**: Each card displays a dynamic badge (`🟢 PRE-PUMP` / `🔴 PRE-DUMP`), prominent color-coded Open Interest changes (`🔥 +24.8% OI` in neon green / `⚠️ -15.2% OI` in red), and exact OI USD volume + 1h velocity.
+            - 📊 **Watchlist Column Headers**: Explicit headers for `COIN`, `PRICE`, `CVD (5M)`, `BUY%`, and `OI DELTA` so every column is clear.
+            - 🎨 **Live Color-Coded OI Delta Column**: Every tracked coin now shows its live rolling OI Delta % in bright neon green (`#00E676`) for $\ge +5\%$, neon red (`#FF3D71`) for $\le -5\%$, and neutral gray for calm coins.
+            - 🎯 **Dedicated High-Visibility Whale Radar Cockpit Banner**: The cockpit card now features an unmissable whale radar banner (`tvProWhaleRadar`) with dynamic color badges for institutional loading or squeeze collapse.
+            - 👑 **Small-Cap Open Interest (OI) % Velocity Engine**: Built specifically for low-cap coins and early breakout movers across Bybit linear perpetuals.
+            - 🛡️ **Risk & Execution Safety**: Strict 5-minute symbol cooldown, instant +$2.00 TP, -$3.50 hard SL, and +1.5% auto break-even lock.
             
             ### 🛠️ Stable Signing:
             - 🔑 **Permanent Dual Signature Scheme (v1 + v2)**: Signed with permanent `sentinel.keystore`. Direct update over previous installations without losing data.
             
             ### 📥 Download
             Download `CryptoSentinel.apk` below and install directly on your phone:
-            https://github.com/Abdul9898/crypto-sentinel-android/releases/download/v1.4.0/CryptoSentinel.apk
+            https://github.com/Abdul9898/crypto-sentinel-android/releases/download/v1.4.1/CryptoSentinel.apk
           files: output/CryptoSentinel.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

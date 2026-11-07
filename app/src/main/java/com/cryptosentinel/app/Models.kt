@@ -37,7 +37,10 @@ data class GainerItem(
     val velocity1hPct: Double = 0.0,
     val change24hPct: Double = change12hPct,
     val high24h: Double = 0.0,
-    val low24h: Double = 0.0
+    val low24h: Double = 0.0,
+    var oiUsd: Double = 0.0,
+    var oiDeltaPct: Double = 0.0,
+    var isPrePump: Boolean = true
 )
 
 data class CoinTierConfig(

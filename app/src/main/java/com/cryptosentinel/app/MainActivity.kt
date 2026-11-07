@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity() {
     private val gainersList = mutableListOf<GainerItem>()
     private val storiesList = mutableListOf<TradeStory>()
     private val activePositionsList = mutableListOf<ActivePositionItem>()
+    private var selectedRadarTab: String = "PRE_PUMP"
 
     private lateinit var coinAdapter: CoinAdapter
     private lateinit var alertAdapter: AlertAdapter
@@ -118,6 +119,24 @@ class MainActivity : AppCompatActivity() {
         }
         binding.rvGainers.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
         binding.rvGainers.adapter = gainerAdapter
+
+        // Pre-Pump & Pre-Dump Radar Tabs Click Listeners
+        binding.tvRadarTabPrePump.setOnClickListener {
+            selectedRadarTab = "PRE_PUMP"
+            binding.tvRadarTabPrePump.setBackgroundResource(R.drawable.bg_pro_badge_cyan)
+            binding.tvRadarTabPrePump.setTextColor(ContextCompat.getColor(this, R.color.primary_cyan))
+            binding.tvRadarTabPreDump.setBackgroundResource(R.drawable.bg_pro_badge_neutral)
+            binding.tvRadarTabPreDump.setTextColor(ContextCompat.getColor(this, R.color.text_dim))
+            updateUiFromService()
+        }
+        binding.tvRadarTabPreDump.setOnClickListener {
+            selectedRadarTab = "PRE_DUMP"
+            binding.tvRadarTabPreDump.setBackgroundResource(R.drawable.bg_pro_badge_red)
+            binding.tvRadarTabPreDump.setTextColor(ContextCompat.getColor(this, R.color.neon_red))
+            binding.tvRadarTabPrePump.setBackgroundResource(R.drawable.bg_pro_badge_neutral)
+            binding.tvRadarTabPrePump.setTextColor(ContextCompat.getColor(this, R.color.text_dim))
+            updateUiFromService()
+        }
 
         // Setup Trade Stories List
         storyAdapter = TradeStoryAdapter(storiesList) { story ->
@@ -397,9 +416,14 @@ class MainActivity : AppCompatActivity() {
         try {
             val s = sentinelService ?: return
 
-            // 1. Update top gainers
+            // 1. Update Pre-Pump / Pre-Dump Radar List
+            val filteredGainers = if (selectedRadarTab == "PRE_PUMP") {
+                s.topGainers.filter { it.isPrePump || it.oiDeltaPct >= 0 }.sortedByDescending { it.oiDeltaPct }
+            } else {
+                s.topGainers.filter { !it.isPrePump || it.oiDeltaPct < 0 }.sortedBy { it.oiDeltaPct }
+            }
             gainersList.clear()
-            gainersList.addAll(s.topGainers)
+            gainersList.addAll(if (filteredGainers.isNotEmpty()) filteredGainers else s.topGainers)
             gainerAdapter.notifyDataSetChanged()
 
             // 2. Update trade stories
@@ -410,8 +434,12 @@ class MainActivity : AppCompatActivity() {
             binding.tvStoriesHeader.visibility = if (hasStories) View.VISIBLE else View.GONE
             binding.rvStories.visibility = if (hasStories) View.VISIBLE else View.GONE
 
-            // 3. Update coins
+            // 3. Update coins with live OI Delta %
             coinsList.clear()
+            for (coin in s.trackedCoins.values) {
+                val oiSummary = s.getCoinOiSummary(coin.symbol)
+                coin.oiDeltaPct = oiSummary.first
+            }
             coinsList.addAll(s.trackedCoins.values.sortedByDescending { Math.abs(it.cvd5m) })
             coinAdapter.notifyDataSetChanged()
 
@@ -445,10 +473,42 @@ class MainActivity : AppCompatActivity() {
                 val lStr = if (pro.low24h < 1) String.format(Locale.US, "$%.4f", pro.low24h) else String.format(Locale.US, "$%,.0f", pro.low24h)
                 " | 24h: $lStr-$hStr"
             } else ""
-            val spikeStr = if (pro.volumeSpikesText.isNotEmpty()) " | ${pro.volumeSpikesText}" else " | ${pro.lastSignalText}"
-            val liqStr = if (pro.liquidationText.isNotEmpty()) " | ${pro.liquidationText}" else ""
-            val oiStr = if (pro.oiText.isNotEmpty()) " | ${pro.oiText}" else ""
-            binding.tvProVelocity.text = String.format(Locale.US, "1h Vel: %s%.2f%% | Vol: %s%s%s%s%s", vSign, pro.velocity1hPct, volStr, rangeStr, spikeStr, oiStr, liqStr)
+            val spikeStr = if (pro.volumeSpikesText.isNotEmpty()) " | ${pro.volumeSpikesText}" else ""
+            binding.tvProVelocity.text = String.format(Locale.US, "1h Vel: %s%.2f%% | 24h Vol: %s%s%s", vSign, pro.velocity1hPct, volStr, rangeStr, spikeStr)
+
+            // Dedicated High-Visibility Whale Radar Banner
+            val fullSym = if (pro.symbol.endsWith("USDT")) pro.symbol else "${pro.symbol}USDT"
+            val oiPair = s.getCoinOiSummary(fullSym)
+            val oiDelta = oiPair.first
+            val oiText = oiPair.second
+            val liqText = s.getRecentLiquidationSummary(fullSym)
+
+            if (oiDelta >= 10.0) {
+                binding.tvProWhaleRadar.visibility = View.VISIBLE
+                binding.tvProWhaleRadar.setBackgroundResource(R.drawable.bg_pro_badge_cyan)
+                binding.tvProWhaleRadar.setTextColor(ContextCompat.getColor(this, R.color.primary_cyan))
+                binding.tvProWhaleRadar.text = "🔥 PRE-PUMP ACCUMULATION: Whale Loading ${String.format(Locale.US, "%+.1f%%", oiDelta)} OI"
+            } else if (oiDelta <= -8.0) {
+                binding.tvProWhaleRadar.visibility = View.VISIBLE
+                binding.tvProWhaleRadar.setBackgroundResource(R.drawable.bg_pro_badge_red)
+                binding.tvProWhaleRadar.setTextColor(ContextCompat.getColor(this, R.color.neon_red))
+                binding.tvProWhaleRadar.text = "⚠️ PRE-DUMP EXHAUSTION: Squeeze Collapse ${String.format(Locale.US, "%+.1f%%", oiDelta)} OI"
+            } else if (liqText.isNotEmpty()) {
+                binding.tvProWhaleRadar.visibility = View.VISIBLE
+                binding.tvProWhaleRadar.setBackgroundResource(R.drawable.bg_pro_badge_green)
+                binding.tvProWhaleRadar.setTextColor(ContextCompat.getColor(this, R.color.neon_green))
+                binding.tvProWhaleRadar.text = liqText
+            } else if (oiText.isNotEmpty()) {
+                binding.tvProWhaleRadar.visibility = View.VISIBLE
+                binding.tvProWhaleRadar.setBackgroundResource(R.drawable.bg_pro_badge_neutral)
+                binding.tvProWhaleRadar.setTextColor(ContextCompat.getColor(this, R.color.primary_cyan))
+                binding.tvProWhaleRadar.text = "⚡ WHALE RADAR: $oiText"
+            } else {
+                binding.tvProWhaleRadar.visibility = View.VISIBLE
+                binding.tvProWhaleRadar.setBackgroundResource(R.drawable.bg_pro_badge_neutral)
+                binding.tvProWhaleRadar.setTextColor(ContextCompat.getColor(this, R.color.text_dim))
+                binding.tvProWhaleRadar.text = "⚡ WHALE RADAR: OI Calibrated · Order Flow Balanced"
+            }
 
             updateProBadge(binding.tvProBadge1m, "1M", pro.macd1mBias, pro.vol1mSpike)
             updateProBadge(binding.tvProBadge5m, "5M", pro.macd5mBias, pro.vol5mSpike)
