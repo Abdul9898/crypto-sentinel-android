@@ -263,15 +263,15 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:checked="true"
-                    android:text="⚡ Auto Reversal Momentum Cut"
+                    android:checked="false"
+                    android:text="⚡ Auto Reversal Cut"
                     android:textColor="@color/text_white"
                     android:textSize="13sp" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Exits position immediately if short-term trend flips against you before loss grows"
+                    android:text="Exits position early on reversal (Default: OFF for pure +$2.00 TP &amp; -$3.50 SL)"
                     android:textColor="@color/text_dim"
                     android:textSize="11sp" />
 

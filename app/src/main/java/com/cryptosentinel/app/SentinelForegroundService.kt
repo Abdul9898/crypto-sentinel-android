@@ -49,6 +49,7 @@ class SentinelForegroundService : Service() {
     // Triple-Timeframe Momentum Engine
     val coinMacdStatus = ConcurrentHashMap<String, ConcurrentHashMap<String, MacdStatus>>()
     private val lastMacdTradeTime = ConcurrentHashMap<String, Long>()
+    private val lastVolumeTradeTime = ConcurrentHashMap<String, Long>()
 
     // Global 24h Ticker Metrics Cache (for BTC & ALL symbols)
     val allCoinMetrics = ConcurrentHashMap<String, GainerItem>()
@@ -57,13 +58,24 @@ class SentinelForegroundService : Service() {
     val coinVolumeSpikes = ConcurrentHashMap<String, ConcurrentHashMap<String, VolumeSpikeInfo>>()
 
     fun detectVolumeSpike(candles: List<CandleStick>): VolumeSpikeInfo {
-        if (candles.size < 6) return VolumeSpikeInfo(false, 1.0, 0.0)
+        if (candles.size < 7) return VolumeSpikeInfo(false, 1.0, 0.0)
         val latest = candles.last()
-        val prevCandles = candles.dropLast(1).takeLast(10)
-        val avgVol = prevCandles.map { it.volume }.average()
-        val ratio = if (avgVol > 0) latest.volume / avgVol else 1.0
-        val isSpike = ratio >= 2.0 && latest.volume > 0.0
-        return VolumeSpikeInfo(isSpike, ratio, latest.volume)
+        val justClosed = candles[candles.size - 2]
+        val baselineCandles = candles.dropLast(2).takeLast(10)
+        val avgVol = baselineCandles.map { it.volume }.average()
+        if (avgVol <= 0.0) return VolumeSpikeInfo(false, 1.0, 0.0)
+
+        val closedRatio = justClosed.volume / avgVol
+        val latestRatio = latest.volume / avgVol
+
+        return if (latestRatio >= 1.8 && latest.volume > 0.0) {
+            VolumeSpikeInfo(isSpike = true, ratio = latestRatio, volume = latest.volume)
+        } else if (closedRatio >= 2.0 && justClosed.volume > 0.0) {
+            VolumeSpikeInfo(isSpike = true, ratio = closedRatio, volume = justClosed.volume)
+        } else {
+            val maxRatio = Math.max(latestRatio, closedRatio)
+            VolumeSpikeInfo(isSpike = false, ratio = maxRatio, volume = latest.volume)
+        }
     }
 
     fun getVolumeSpikeSummary(sym: String): String {
@@ -376,13 +388,21 @@ class SentinelForegroundService : Service() {
         val high24 = metrics?.high24h ?: 0.0
         val low24 = metrics?.low24h ?: 0.0
 
+        val m1 = coinMacdStatus[fullSym]?.get("1")
         val m5 = coinMacdStatus[fullSym]?.get("5")
         val m15 = coinMacdStatus[fullSym]?.get("15")
         val m60 = coinMacdStatus[fullSym]?.get("60")
 
+        val bias1 = if (m1 != null) (if (m1.isBullish) "BULLISH" else "BEARISH") else "SCANNING..."
         val bias5 = if (m5 != null) (if (m5.isBullish) "BULLISH" else "BEARISH") else "SCANNING..."
         val bias15 = if (m15 != null) (if (m15.isBullish) "BULLISH" else "BEARISH") else "SCANNING..."
         val bias1h = if (m60 != null) (if (m60.isBullish) "BULLISH" else "BEARISH") else "SCANNING..."
+
+        val spikes = coinVolumeSpikes[fullSym]
+        val v1 = spikes?.get("1")?.ratio ?: 1.0
+        val v5 = spikes?.get("5")?.ratio ?: 1.0
+        val v15 = spikes?.get("15")?.ratio ?: 1.0
+        val v60 = spikes?.get("60")?.ratio ?: 1.0
 
         val volSpikes = getVolumeSpikeSummary(fullSym)
 
@@ -394,9 +414,14 @@ class SentinelForegroundService : Service() {
             turnover24h = turnover,
             high24h = high24,
             low24h = low24,
+            macd1mBias = bias1,
             macd5mBias = bias5,
             macd15mBias = bias15,
             macd1hBias = bias1h,
+            vol1mSpike = v1,
+            vol5mSpike = v5,
+            vol15mSpike = v15,
+            vol1hSpike = v60,
             lastSignalTime = proEngineState.lastSignalTime,
             lastSignalText = proEngineState.lastSignalText,
             volumeSpikesText = volSpikes
@@ -471,10 +496,15 @@ class SentinelForegroundService : Service() {
                                                     val map = coinMacdStatus.getOrPut(sym) { ConcurrentHashMap() }
                                                     map[interval] = macd
 
-                                                    // Trigger trade directly if Zero-Cross fired on 5m, 15m, or 1h (1m is used for volume spike detection)
-                                                    if (interval != "1") {
-                                                        evaluateMacdTrigger(sym, interval, tfLabel, macd, candles.last().close)
-                                                    }
+                                                // 3. PURE VOLUME SPIKE TRADE ENTRY (Any timeframe: 1m, 5m, 15m, 1h)
+                                                if (volSpike.isSpike) {
+                                                    val latestCandle = candles.last()
+                                                    val justClosed = candles[candles.size - 2]
+                                                    val baselineAvg = candles.dropLast(2).takeLast(10).map { it.volume }.average().takeIf { it > 0 } ?: 1.0
+                                                    val isLatestSurging = (latestCandle.volume / baselineAvg) >= 1.8
+                                                    val targetCandle = if (isLatestSurging) latestCandle else justClosed
+                                                    val isLong = targetCandle.close >= targetCandle.open
+                                                    evaluateVolumeSpikeTrigger(sym, interval, tfLabel, isLong, candles.last().close, volSpike)
                                                 }
                                             }
                                         }
@@ -527,59 +557,50 @@ class SentinelForegroundService : Service() {
         )
     }
 
-    private fun evaluateMacdTrigger(
+    private fun evaluateVolumeSpikeTrigger(
         sym: String,
         interval: String,
         tfLabel: String,
-        macd: MacdStatus,
-        lastPrice: Double
+        isLong: Boolean,
+        lastPrice: Double,
+        volSpike: VolumeSpikeInfo
     ) {
-        if (!macd.isCrossUp && !macd.isCrossDown) return
-
-        val isLong = macd.isCrossUp
         val side = if (isLong) "LONG" else "SHORT"
-        val cooldownKey = "${sym}_${interval}_$side"
+        val cooldownKey = "${sym}_${interval}"
         val now = System.currentTimeMillis()
         val cooldownMs = when (interval) {
-            "5" -> 5 * 60 * 1000L      // 5 min cooldown
-            "15" -> 15 * 60 * 1000L    // 15 min cooldown
-            "60" -> 45 * 60 * 1000L    // 45 min cooldown
-            else -> 10 * 60 * 1000L
+            "1" -> 2 * 60 * 1000L      // 2 min cooldown for 1m spike
+            "5" -> 5 * 60 * 1000L      // 5 min cooldown for 5m spike
+            "15" -> 15 * 60 * 1000L    // 15 min cooldown for 15m spike
+            "60" -> 30 * 60 * 1000L    // 30 min cooldown for 1h spike
+            else -> 5 * 60 * 1000L
         }
 
-        val lastTrigger = lastMacdTradeTime[cooldownKey] ?: 0L
+        val lastTrigger = lastVolumeTradeTime[cooldownKey] ?: 0L
         if (now - lastTrigger < cooldownMs) return
-
-        lastMacdTradeTime[cooldownKey] = now
 
         val cleanSym = sym.replace("1000", "").replace("USDT", "")
 
         // 1. Never trade closed-market stock tokens
         if (cleanSym in NON_CRYPTO_SYMBOLS || sym.contains("STOCK")) return
 
-        // 2. Momentum & Volatility Gate: do not enter if coin is trapped in a 0.00% flatline dead zone
-        val gainer = allCoinMetrics[cleanSym] ?: allCoinMetrics[sym] ?: synchronized(topGainers) { topGainers.find { it.symbol == cleanSym } }
-        if (gainer != null) {
-            if (Math.abs(gainer.velocity1hPct) < 0.15 && Math.abs(gainer.change12hPct) < 0.40) {
-                return
-            }
-        }
-
         val currentPrice = trackedCoins[sym]?.price.takeIf { it != null && it > 0 } ?: lastPrice
         // EXCLUDE SUB-CENT COINS (< $0.05) to eliminate pip-spread traps (e.g. HUMA, QUSDT)
         if (currentPrice < 0.05) return
 
         val pStr = if (currentPrice < 1.0) String.format(Locale.US, "$%.4f", currentPrice) else String.format(Locale.US, "$%.2f", currentPrice)
-        val difStr = String.format(Locale.US, "%+.6f", macd.dif)
         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
+        val spikeRatioStr = String.format(Locale.US, "%.1fx", volSpike.ratio)
 
-        // Direct Auto-Trade Execution
+        // 2. Direct Auto-Trade Execution
         val totalOpen = synchronized(paperStats.openPositions) { paperStats.openPositions.size }
         val hasOpenForSym = synchronized(paperStats.openPositions) {
             paperStats.openPositions.any { it.symbol == sym }
         }
 
         if (totalOpen < 3 && !hasOpenForSym) {
+            lastVolumeTradeTime[cooldownKey] = now
+
             val tierConfig = TierCalculator.getConfig(sym)
             val targetProfit = if (settings.targetProfitUsd > 0.0) settings.targetProfitUsd else 2.0
             val maxLoss = if (settings.maxLossUsd > 0.0) settings.maxLossUsd else 3.5
@@ -588,9 +609,6 @@ class SentinelForegroundService : Service() {
             val quickSlPct = if (notional > 0.0) (maxLoss / notional) * 100.0 else tierConfig.slPct
             val tp = if (isLong) currentPrice * (1.0 + quickTpPct / 100.0) else currentPrice * (1.0 - quickTpPct / 100.0)
             val sl = if (isLong) currentPrice * (1.0 - quickSlPct / 100.0) else currentPrice * (1.0 + quickSlPct / 100.0)
-
-            val volSpikes = getVolumeSpikeSummary(sym)
-            val volNote = if (volSpikes.isNotEmpty()) " | $volSpikes" else ""
 
             val pos = PaperPosition(
                 symbol = sym,
@@ -603,37 +621,35 @@ class SentinelForegroundService : Service() {
                 tpPct = quickTpPct,
                 slPct = quickSlPct,
                 openTimeStr = timeStr,
-                triggerReason = "Trend Alignment ($tfLabel)$volNote",
+                triggerReason = "⚡ Vol Surge $tfLabel ($spikeRatioStr)",
                 openTimestamp = now
             )
             synchronized(paperStats.openPositions) {
                 paperStats.openPositions.add(pos)
             }
             StateManager.saveState(this, paperStats, tradeStories)
+
+            // Update PRO Engine status
+            proEngineState = proEngineState.copy(
+                lastSignalTime = now,
+                lastSignalText = "⚡ $side Vol Surge ($tfLabel $spikeRatioStr): $cleanSym @ $pStr"
+            )
+
+            // Dedicated Signal Alert & Notification specifying timeframe and surge ratio
+            val alert = AlertItem(
+                timeStr = timeStr,
+                symbol = cleanSym,
+                type = "VOL_SURGE_SIGNAL",
+                conviction = "HIGH",
+                message = "⚡ VOL SURGE $side ($tfLabel): $cleanSym @ $pStr | $spikeRatioStr Volume"
+            )
+            addAlert(alert)
+            sendAlertNotification(
+                "⚡ Vol Surge: $side $cleanSym ($tfLabel)",
+                "Volume surge $spikeRatioStr on $tfLabel chart @ $pStr (${settings.leverage}x)"
+            )
+            scheduleUiUpdate(force = true)
         }
-
-        // Update PRO Engine status
-        proEngineState = proEngineState.copy(
-            lastSignalTime = now,
-            lastSignalText = "🎯 $side on $tfLabel: $cleanSym @ $pStr"
-        )
-
-        // Dedicated Signal Alert & Notification specifying timeframe
-        val volSpikes = getVolumeSpikeSummary(sym)
-        val volNote = if (volSpikes.isNotEmpty()) " | $volSpikes" else ""
-        val alert = AlertItem(
-            timeStr = timeStr,
-            symbol = cleanSym,
-            type = "QUANT_SIGNAL",
-            conviction = "HIGH",
-            message = "🎯 QUANT ALPHA $side ($tfLabel): $cleanSym @ $pStr$volNote"
-        )
-        addAlert(alert)
-        sendAlertNotification(
-            "🎯 Alpha Signal: $side $cleanSym ($tfLabel)",
-            "Institutional momentum alignment detected on $tfLabel chart @ $pStr (${settings.leverage}x)$volNote"
-        )
-        scheduleUiUpdate(force = true)
     }
 
     fun executeManualTrade(side: String) {
@@ -785,23 +801,8 @@ class SentinelForegroundService : Service() {
                         }
                     }
 
-                    // 4. Reverse Momentum Cut (Requires 45s grace period, real loss <= -$2.00, and confirmed fresh cross)
+                    // 4. Current PnL calculation (Pure TP/SL execution)
                     val curPnlUsd = (diffPct / 100.0) * pos.sizeUsd * pos.leverage
-                    val ageMs = System.currentTimeMillis() - pos.openTimestamp
-                    if (settings.isReverseMacdCutEnabled && ageMs >= 45_000L && curPnlUsd <= -2.00) {
-                        val m5 = coinMacdStatus[pos.symbol]?.get("5")
-                        val isM5Reverse = if (isLong) {
-                            m5 != null && m5.isCrossDown
-                        } else {
-                            m5 != null && m5.isCrossUp
-                        }
-                        if (isM5Reverse) {
-                            val revOutcome = String.format(Locale.US, "REVERSE (TREND FLIP -$%.2f)", Math.abs(curPnlUsd))
-                            toClose.add(Triple(pos, revOutcome, currentPrice))
-                            it.remove()
-                            continue
-                        }
-                    }
 
                     // 5. Trigger Check: Quick Target Profit (e.g. $2.00) or TP price hit, and Hard Max Loss / SL hit
                     val targetProfit = if (settings.targetProfitUsd > 0.0) settings.targetProfitUsd else 2.0

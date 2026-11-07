@@ -163,7 +163,7 @@ data class TradingSettings(
     var leverage: Int = 5,
     var targetProfitUsd: Double = 2.0,
     var maxLossUsd: Double = 3.5,
-    var isReverseMacdCutEnabled: Boolean = true,
+    var isReverseMacdCutEnabled: Boolean = false,
     var isBreakEvenEnabled: Boolean = true,
     var beTriggerPct: Double = 1.5,
     var isTrailingEnabled: Boolean = true,
@@ -185,11 +185,16 @@ data class ProEngineState(
     val turnover24h: Double = 0.0,
     val high24h: Double = 0.0,
     val low24h: Double = 0.0,
+    val macd1mBias: String = "NEUTRAL",
     val macd5mBias: String = "NEUTRAL",
     val macd15mBias: String = "NEUTRAL",
     val macd1hBias: String = "NEUTRAL",
+    val vol1mSpike: Double = 1.0,
+    val vol5mSpike: Double = 1.0,
+    val vol15mSpike: Double = 1.0,
+    val vol1hSpike: Double = 1.0,
     val lastSignalTime: Long = 0L,
-    val lastSignalText: String = "Monitoring Multi-Timeframe Trend...",
+    val lastSignalText: String = "Monitoring 4-Timeframe Volume Spikes...",
     val volumeSpikesText: String = ""
 )
 

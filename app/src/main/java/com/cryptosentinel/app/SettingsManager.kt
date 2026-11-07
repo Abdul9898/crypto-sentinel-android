@@ -27,7 +27,7 @@ object SettingsManager {
             leverage = prefs.getInt(KEY_LEVERAGE, 5),
             targetProfitUsd = prefs.getFloat(KEY_TARGET_PROFIT, 2.0f).toDouble(),
             maxLossUsd = prefs.getFloat(KEY_MAX_LOSS_USD, 3.5f).toDouble(),
-            isReverseMacdCutEnabled = prefs.getBoolean(KEY_REVERSE_MACD_CUT, true),
+            isReverseMacdCutEnabled = prefs.getBoolean(KEY_REVERSE_MACD_CUT, false),
             isBreakEvenEnabled = prefs.getBoolean(KEY_BE_ENABLED, true),
             beTriggerPct = prefs.getFloat(KEY_BE_TRIGGER, 1.5f).toDouble(),
             isTrailingEnabled = prefs.getBoolean(KEY_TRAIL_ENABLED, true),

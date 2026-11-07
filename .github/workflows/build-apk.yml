@@ -61,26 +61,24 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.2.1' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.2.1' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.2.2' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.2.2' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.2.1 (Universal Volume Engine & 4-TF Volume Spike Detection)
+            ## ⚡ Crypto Sentinel Android v1.2.2 (Pure 4-Timeframe Volume Surge Trading)
             
-            ### 🚀 What's New in v1.2.1:
-            - 💧 **Universal 24h Ticker Volume (All Symbols & BTC)**: Cached live Bybit 24h ticker metrics for every linear symbol. BTC and any selected coin now accurately show their real 24h turnover (e.g. `$28.5B`), 1h velocity, and 24h high/low range instead of `$0`.
-            - 🔥 **4-Timeframe Volume Spike Surge Detector (1m, 5m, 15m, 1h)**: Continuously scans volume surges across 4 timeframes (1m ignition, 5m acceleration, 15m breakout, 1h macro). Displays active surges (e.g. `🔥 VOL SURGE: 1m:3.2x | 5m:2.4x`) to confirm momentum pushes price into profit.
-            - 🛡️ **Anti-Panic Cut (45-Second Breathing Room & Confirmed Cross)**:
-              - Added a 45-second grace period for new trades so normal opening bid-ask spreads do not cause premature 0-second panic exits.
-              - Reversal Cut only triggers if position loss is real (`curPnl <= -$2.00`) AND a confirmed opposing cross occurs.
-              - Hard Max Loss Cap (`-$3.50`) continues to strictly prevent losses from exceeding the user's risk tolerance.
-            - 🚫 **Sub-Cent Micro-Token Filter (< $0.05)**: Filtered out tokens priced under $0.05 (such as HUMA and QUSDT) where wide tick spreads could cause unexpected pip slippage.
+            ### 🚀 What's New in v1.2.2:
+            - 🌊 **Pure Volume Surge Entry (Any Timeframe: 1m, 5m, 15m, 1h)**: The bot now triggers trades directly on volume spikes across all 4 timeframes! When a surge occurs, the bot enters immediately following the candle direction (Green = LONG, Red = SHORT) to capture rapid momentum pushes.
+            - 🎯 **Pure Quick TP ($2.00) & Hard SL ($3.50)**: All indicator-based reversal cuts have been eliminated. Positions have full breathing room to run directly to our quick +$2.00 profit target or exit at the strict -$3.50 hard stop-loss cap (with +1.5% auto break-even lock).
+            - ⚡ **Enhanced Multi-Candle Volume Surge Engine**: Detects both developing live surges ($\ge 1.8\times$) and completed candle spikes ($\ge 2.0\times$) against 10-candle moving average volume.
+            - 📊 **4-Timeframe Live Volume Heat-Map Badges (1M, 5M, 15M, 1H)**: Added real-time badges displaying live volume multiplier and candle bias across all 4 timeframes on the focal cockpit card. Active spikes light up in vibrant cyan (`🔥 1M: 3.2x`).
+            - 🛡️ **Sub-Cent Micro-Token Filter (< $0.05)** & **24/7 Background Persistence** maintained.
             
             ### 🛠️ Stable Signing:
             - 🔑 **Dual Signature Schemes (v1 + v2)**: Permanent signed release with `sentinel.keystore`. Installs seamlessly over previous versions.
             
             ### 📥 Download
             Download `CryptoSentinel.apk` below and install directly on your phone:
-            `https://github.com/Abdul9898/crypto-sentinel-android/releases/download/v1.2.1/CryptoSentinel.apk`
+            `https://github.com/Abdul9898/crypto-sentinel-android/releases/download/v1.2.2/CryptoSentinel.apk`
           files: output/CryptoSentinel.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

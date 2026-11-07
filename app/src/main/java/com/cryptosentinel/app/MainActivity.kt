@@ -448,9 +448,10 @@ class MainActivity : AppCompatActivity() {
             val spikeStr = if (pro.volumeSpikesText.isNotEmpty()) " | ${pro.volumeSpikesText}" else " | ${pro.lastSignalText}"
             binding.tvProVelocity.text = String.format(Locale.US, "1h Vel: %s%.2f%% | Vol: %s%s%s", vSign, pro.velocity1hPct, volStr, rangeStr, spikeStr)
 
-            updateProBadge(binding.tvProBadge5m, "5M", pro.macd5mBias)
-            updateProBadge(binding.tvProBadge15m, "15M", pro.macd15mBias)
-            updateProBadge(binding.tvProBadge1h, "1H", pro.macd1hBias)
+            updateProBadge(binding.tvProBadge1m, "1M", pro.macd1mBias, pro.vol1mSpike)
+            updateProBadge(binding.tvProBadge5m, "5M", pro.macd5mBias, pro.vol5mSpike)
+            updateProBadge(binding.tvProBadge15m, "15M", pro.macd15mBias, pro.vol15mSpike)
+            updateProBadge(binding.tvProBadge1h, "1H", pro.macd1hBias, pro.vol1hSpike)
 
             binding.btnProLong.text = "🟢 LONG $symClean"
             binding.btnProShort.text = "🔴 SHORT $symClean"
@@ -481,7 +482,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 binding.rvActivePositions.visibility = View.GONE
                 binding.tvPositionsEmpty.visibility = View.VISIBLE
-                binding.tvPositionsEmpty.text = "⚡ Algorithmic Auto-Trading Active (${s.settings.leverage}x Leverage | Multi-Timeframe Trend Scanner)..."
+                binding.tvPositionsEmpty.text = "⚡ Volume Surge Auto-Trading Active (${s.settings.leverage}x Leverage | 4-Timeframe Scanner)..."
                 if (activePositionsList.isNotEmpty()) {
                     activePositionsList.clear()
                     activePositionAdapter.notifyDataSetChanged()
@@ -492,22 +493,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateProBadge(tv: TextView, tfLabel: String, bias: String) {
-        when (bias) {
-            "BULLISH" -> {
-                tv.setBackgroundResource(R.drawable.bg_pro_badge_green)
-                tv.setTextColor(ContextCompat.getColor(this, R.color.neon_green))
-                tv.text = "$tfLabel: BULLISH"
-            }
-            "BEARISH" -> {
-                tv.setBackgroundResource(R.drawable.bg_pro_badge_red)
-                tv.setTextColor(ContextCompat.getColor(this, R.color.neon_red))
-                tv.text = "$tfLabel: BEARISH"
-            }
-            else -> {
-                tv.setBackgroundResource(R.drawable.bg_pro_badge_neutral)
-                tv.setTextColor(ContextCompat.getColor(this, R.color.text_dim))
-                tv.text = "$tfLabel: SCANNING..."
+    private fun updateProBadge(tv: TextView, tfLabel: String, bias: String, volRatio: Double) {
+        if (volRatio >= 1.8) {
+            tv.setBackgroundResource(R.drawable.bg_pro_badge_cyan)
+            tv.setTextColor(ContextCompat.getColor(this, R.color.primary_cyan))
+            tv.text = "🔥 $tfLabel: ${String.format(Locale.US, "%.1fx", volRatio)}"
+        } else {
+            val volText = if (volRatio > 1.0) String.format(Locale.US, " %.1fx", volRatio) else ""
+            when (bias) {
+                "BULLISH" -> {
+                    tv.setBackgroundResource(R.drawable.bg_pro_badge_green)
+                    tv.setTextColor(ContextCompat.getColor(this, R.color.neon_green))
+                    tv.text = "$tfLabel: 🟢$volText"
+                }
+                "BEARISH" -> {
+                    tv.setBackgroundResource(R.drawable.bg_pro_badge_red)
+                    tv.setTextColor(ContextCompat.getColor(this, R.color.neon_red))
+                    tv.text = "$tfLabel: 🔴$volText"
+                }
+                else -> {
+                    tv.setBackgroundResource(R.drawable.bg_pro_badge_neutral)
+                    tv.setTextColor(ContextCompat.getColor(this, R.color.text_dim))
+                    tv.text = "$tfLabel: CALM"
+                }
             }
         }
     }
