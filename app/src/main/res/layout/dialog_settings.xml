@@ -28,11 +28,56 @@
             android:textColor="@color/text_dim"
             android:textSize="12sp" />
 
+        <!-- Card: Quick $10 Balance Preset -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            app:cardBackgroundColor="#132328"
+            app:cardCornerRadius="8dp"
+            app:strokeColor="@color/primary_cyan"
+            app:strokeWidth="1.5dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⚡ 1-TAP $10 ACCOUNT PRESET"
+                    android:textColor="@color/primary_cyan"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Calibrated for $10 balance: $3.50 margin, 3x leverage, +$1.00 TP, -$0.50 SL, auto break-even at +2.0%"
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnApplyTenDollarPreset"
+                    android:layout_width="match_parent"
+                    android:layout_height="38dp"
+                    android:layout_marginTop="8dp"
+                    android:backgroundTint="@color/primary_cyan"
+                    android:text="⚡ Apply $10 Balance Settings"
+                    android:textColor="@color/bg_dark"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- Card: Capital & Position Size -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="10dp"
             app:cardBackgroundColor="@color/card_bg"
             app:cardCornerRadius="8dp"
             app:strokeColor="@color/card_border"
@@ -311,6 +356,125 @@
                     android:textColor="@color/text_dim"
                     android:textSize="11sp" />
 
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Card: Bybit Real Trading API Binding -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            app:cardBackgroundColor="@color/card_bg"
+            app:cardCornerRadius="8dp"
+            app:strokeColor="@color/card_border"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔑 BYBIT V5 REAL TRADING API BINDING"
+                    android:textColor="@color/primary_cyan"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <!-- Live Trading Switch -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchLiveTrading"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:checked="false"
+                    android:text="🔴 Enable Live Bybit Trading (Real Money)"
+                    android:textColor="@color/neon_red"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="OFF = Safe Paper Simulation. ON = Executes real orders on Bybit."
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+
+                <!-- API Key -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Bybit API Key"
+                    android:textColor="@color/text_white"
+                    android:textSize="12sp" />
+
+                <EditText
+                    android:id="@+id/etBybitApiKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="4dp"
+                    android:background="@color/bg_dark"
+                    android:hint="Enter Bybit V5 API Key"
+                    android:inputType="text"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/text_white"
+                    android:textColorHint="@color/text_dim"
+                    android:textSize="12sp" />
+
+                <!-- API Secret -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Bybit API Secret"
+                    android:textColor="@color/text_white"
+                    android:textSize="12sp" />
+
+                <EditText
+                    android:id="@+id/etBybitApiSecret"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="4dp"
+                    android:background="@color/bg_dark"
+                    android:hint="Enter Bybit V5 Secret Key"
+                    android:inputType="textPassword"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/text_white"
+                    android:textColorHint="@color/text_dim"
+                    android:textSize="12sp" />
+
+                <!-- Test Connection Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnTestBybitApi"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="38dp"
+                    android:layout_marginTop="10dp"
+                    android:text="🔍 Test Connection &amp; Verify Key"
+                    android:textColor="@color/primary_cyan"
+                    android:textSize="11sp"
+                    app:strokeColor="@color/primary_cyan" />
+
+                <!-- API Status / Verification Output -->
+                <TextView
+                    android:id="@+id/tvBybitStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Status: Not tested yet"
+                    android:textColor="@color/text_dim"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="🛡️ Safety: Only enable Contract Trading. NEVER enable Withdrawal permission. Keys are stored locally on your device."
+                    android:textColor="#FFAA00"
+                    android:textSize="10sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

@@ -61,26 +61,25 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.4.1' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.4.1' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.4.2' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.4.2' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.4.1 (Visual Pre-Pump & Pre-Dump Whale Radar + Color-Coded Watchlist)
+            ## ⚡ Crypto Sentinel Android v1.4.2 (Bybit API Key Binding & Calibrated $10 Account Engine)
             
-            ### 🚀 What's New in v1.4.1:
-            - 🟢 **Pre-Pump & 🔴 Pre-Dump Filter Tabs**: Instant toggle buttons `[ 🟢 PRE-PUMP ACCUMULATION ]` and `[ 🔴 PRE-DUMP EXHAUSTION ]` to quickly isolate coins where whales are quietly loading vs coins suffering squeeze collapse.
-            - 🏷️ **Visual Radar Cards**: Each card displays a dynamic badge (`🟢 PRE-PUMP` / `🔴 PRE-DUMP`), prominent color-coded Open Interest changes (`🔥 +24.8% OI` in neon green / `⚠️ -15.2% OI` in red), and exact OI USD volume + 1h velocity.
-            - 📊 **Watchlist Column Headers**: Explicit headers for `COIN`, `PRICE`, `CVD (5M)`, `BUY%`, and `OI DELTA` so every column is clear.
-            - 🎨 **Live Color-Coded OI Delta Column**: Every tracked coin now shows its live rolling OI Delta % in bright neon green (`#00E676`) for $\ge +5\%$, neon red (`#FF3D71`) for $\le -5\%$, and neutral gray for calm coins.
-            - 🎯 **Dedicated High-Visibility Whale Radar Cockpit Banner**: The cockpit card now features an unmissable whale radar banner (`tvProWhaleRadar`) with dynamic color badges for institutional loading or squeeze collapse.
-            - 👑 **Small-Cap Open Interest (OI) % Velocity Engine**: Built specifically for low-cap coins and early breakout movers across Bybit linear perpetuals.
-            - 🛡️ **Risk & Execution Safety**: Strict 5-minute symbol cooldown, instant +$2.00 TP, -$3.50 hard SL, and +1.5% auto break-even lock.
+            ### 🚀 What's New in v1.4.2:
+            - ⚡ **1-Tap $10 Account Preset**: Instantly configure the entire trading and risk architecture for a $10 USDT account with a single tap ($3.50 margin, 3x isolated leverage, +$1.00 TP, -$0.50 SL, auto break-even lock at +2.0%).
+            - 🔑 **Bybit V5 Real Trading API Binding**: Securely input and bind your Bybit API Key and Secret directly within the in-app Settings dialog (stored locally in encrypted preferences).
+            - 🔍 **Live API Connection & Permissions Tester**: Built-in test button verifies Bybit credentials in real time, checks account connectivity, and confirms that withdrawals are disabled for maximum security.
+            - 🔀 **Paper Simulation vs. Live Bybit Switch**: Seamlessly toggle between `🧪 PAPER SIM` and `🔴 LIVE BYBIT` execution. Top bar features a dynamic mode pill so you always know your active status at a glance.
+            - 🛡️ **Native Bybit Bracket Orders**: Live orders automatically attach Bybit server-side Take Profit and Stop Loss to protect against mobile disconnections.
+            - 🟢 **Pre-Pump & 🔴 Pre-Dump Radar Table**: Full live radar with filter tabs, color-coded OI deltas, and watchlist column headers.
             
             ### 🛠️ Stable Signing:
             - 🔑 **Permanent Dual Signature Scheme (v1 + v2)**: Signed with permanent `sentinel.keystore`. Direct update over previous installations without losing data.
             
             ### 📥 Download
             Download `CryptoSentinel.apk` below and install directly on your phone:
-            https://github.com/Abdul9898/crypto-sentinel-android/releases/download/v1.4.1/CryptoSentinel.apk
+            https://github.com/Abdul9898/crypto-sentinel-android/releases/download/v1.4.2/CryptoSentinel.apk
           files: output/CryptoSentinel.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

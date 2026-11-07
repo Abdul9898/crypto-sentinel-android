@@ -665,6 +665,86 @@ class SentinelForegroundService : Service() {
         )
     }
 
+    private fun dispatchLiveOrderIfEnabled(
+        symbol: String,
+        side: String,
+        price: Double,
+        tpPrice: Double,
+        slPrice: Double,
+        triggerLabel: String
+    ) {
+        if (!settings.isLiveTradingEnabled) return
+        val apiKey = settings.bybitApiKey
+        val apiSecret = settings.bybitApiSecret
+        if (apiKey.isBlank() || apiSecret.isBlank()) return
+
+        val notional = settings.positionSizeUsd * settings.leverage
+        val qty = if (price > 0.0) notional / price else 0.0
+        if (qty <= 0.0) return
+
+        BybitApiClient.placeLinearMarketOrder(
+            apiKey = apiKey,
+            apiSecret = apiSecret,
+            symbol = symbol,
+            side = side,
+            qty = qty,
+            leverage = settings.leverage,
+            takeProfitPrice = tpPrice,
+            stopLossPrice = slPrice
+        ) { success, orderId, msg ->
+            val cleanSym = symbol.replace("1000", "").replace("USDT", "")
+            val timeStr = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
+            if (success) {
+                addAlert(AlertItem(
+                    timeStr = timeStr,
+                    symbol = cleanSym,
+                    type = "LIVE_ORDER",
+                    conviction = "HIGH",
+                    message = "🔴 LIVE BYBIT ORDER: $side $cleanSym | ID: $orderId ($triggerLabel)"
+                ))
+            } else {
+                addAlert(AlertItem(
+                    timeStr = timeStr,
+                    symbol = cleanSym,
+                    type = "LIVE_ORDER_ERROR",
+                    conviction = "HIGH",
+                    message = "⚠️ LIVE ORDER FAILED: $cleanSym $side | $msg"
+                ))
+            }
+        }
+    }
+
+    private fun dispatchLiveCloseIfEnabled(symbol: String, entrySide: String, entryPrice: Double) {
+        if (!settings.isLiveTradingEnabled) return
+        val apiKey = settings.bybitApiKey
+        val apiSecret = settings.bybitApiSecret
+        if (apiKey.isBlank() || apiSecret.isBlank()) return
+
+        val notional = settings.positionSizeUsd * settings.leverage
+        val qty = if (entryPrice > 0.0) notional / entryPrice else 0.0
+        if (qty <= 0.0) return
+
+        BybitApiClient.closeLinearPosition(
+            apiKey = apiKey,
+            apiSecret = apiSecret,
+            symbol = symbol,
+            entrySide = entrySide,
+            qty = qty
+        ) { success, msg ->
+            val cleanSym = symbol.replace("1000", "").replace("USDT", "")
+            val timeStr = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
+            if (!success) {
+                addAlert(AlertItem(
+                    timeStr = timeStr,
+                    symbol = cleanSym,
+                    type = "LIVE_CLOSE_NOTE",
+                    conviction = "MEDIUM",
+                    message = "⚠️ LIVE CLOSE NOTE: $cleanSym | $msg"
+                ))
+            }
+        }
+    }
+
     private fun evaluateVolumeSpikeTrigger(
         sym: String,
         interval: String,
@@ -735,6 +815,7 @@ class SentinelForegroundService : Service() {
             synchronized(paperStats.openPositions) {
                 paperStats.openPositions.add(pos)
             }
+            dispatchLiveOrderIfEnabled(sym, side, currentPrice, tp, sl, "Vol Surge $tfLabel")
             StateManager.saveState(this, paperStats, tradeStories)
 
             // Update PRO Engine status
@@ -798,6 +879,7 @@ class SentinelForegroundService : Service() {
         synchronized(paperStats.openPositions) {
             paperStats.openPositions.add(pos)
         }
+        dispatchLiveOrderIfEnabled(fullSym, side, curPrice, tp, sl, "Manual 1-Tap")
         StateManager.saveState(this, paperStats, tradeStories)
 
         val cleanSym = fullSym.replace("1000", "").replace("USDT", "")
@@ -1002,6 +1084,7 @@ class SentinelForegroundService : Service() {
             synchronized(paperStats.openPositions) {
                 paperStats.openPositions.add(pos)
             }
+            dispatchLiveOrderIfEnabled(sym, side, currentPrice, tp, sl, "Liquidation Flush")
             StateManager.saveState(this, paperStats, tradeStories)
 
             proEngineState = proEngineState.copy(
@@ -1111,6 +1194,7 @@ class SentinelForegroundService : Service() {
             synchronized(paperStats.openPositions) {
                 paperStats.openPositions.add(pos)
             }
+            dispatchLiveOrderIfEnabled(sym, side, currentPrice, tp, sl, "Whale OI")
             StateManager.saveState(this, paperStats, tradeStories)
 
             proEngineState = proEngineState.copy(
@@ -1221,6 +1305,7 @@ class SentinelForegroundService : Service() {
         val cleanSym = sym.replace("1000", "").replace("USDT", "")
 
         for ((pos, outcome, exitPrice) in toClose) {
+            dispatchLiveCloseIfEnabled(pos.symbol, pos.side, pos.entryPrice)
             val isLong = pos.side == "LONG"
             val rawDiffPct = if (isLong) ((exitPrice - pos.entryPrice) / pos.entryPrice) * 100.0
                              else ((pos.entryPrice - exitPrice) / pos.entryPrice) * 100.0
@@ -1292,6 +1377,7 @@ class SentinelForegroundService : Service() {
         }
 
         val pos = closedPos ?: return
+        dispatchLiveCloseIfEnabled(pos.symbol, pos.side, pos.entryPrice)
         val isLong = pos.side == "LONG"
         val diffPct = if (isLong) ((curPrice - pos.entryPrice) / pos.entryPrice) * 100.0
                       else ((pos.entryPrice - curPrice) / pos.entryPrice) * 100.0

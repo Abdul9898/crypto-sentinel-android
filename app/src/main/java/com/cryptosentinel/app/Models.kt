@@ -161,17 +161,20 @@ data class MarketMatrixState(
 )
 
 data class TradingSettings(
-    var startingBalance: Double = 10000.0,
-    var positionSizeUsd: Double = 500.0,
-    var leverage: Int = 5,
-    var targetProfitUsd: Double = 2.0,
-    var maxLossUsd: Double = 3.5,
+    var startingBalance: Double = 10.0,
+    var positionSizeUsd: Double = 3.5,
+    var leverage: Int = 3,
+    var targetProfitUsd: Double = 1.0,
+    var maxLossUsd: Double = 0.5,
     var isReverseMacdCutEnabled: Boolean = false,
     var isBreakEvenEnabled: Boolean = true,
-    var beTriggerPct: Double = 1.5,
+    var beTriggerPct: Double = 2.0,
     var isTrailingEnabled: Boolean = true,
-    var trailingTriggerPct: Double = 2.0,
-    var trailingDistancePct: Double = 1.2
+    var trailingTriggerPct: Double = 2.5,
+    var trailingDistancePct: Double = 1.2,
+    var bybitApiKey: String = "",
+    var bybitApiSecret: String = "",
+    var isLiveTradingEnabled: Boolean = false
 )
 
 data class VolumeSpikeInfo(

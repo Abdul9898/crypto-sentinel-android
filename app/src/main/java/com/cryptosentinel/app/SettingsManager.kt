@@ -18,21 +18,27 @@ object SettingsManager {
     private const val KEY_TRAIL_ENABLED = "trail_enabled"
     private const val KEY_TRAIL_TRIGGER = "trail_trigger"
     private const val KEY_TRAIL_DIST = "trail_distance"
+    private const val KEY_BYBIT_API_KEY = "bybit_api_key"
+    private const val KEY_BYBIT_API_SECRET = "bybit_api_secret"
+    private const val KEY_LIVE_TRADING = "is_live_trading_enabled"
 
     fun loadSettings(context: Context): TradingSettings {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return TradingSettings(
-            startingBalance = prefs.getFloat(KEY_STARTING_BALANCE, 10000f).toDouble(),
-            positionSizeUsd = prefs.getFloat(KEY_POSITION_SIZE, 500f).toDouble(),
-            leverage = prefs.getInt(KEY_LEVERAGE, 5),
-            targetProfitUsd = prefs.getFloat(KEY_TARGET_PROFIT, 2.0f).toDouble(),
-            maxLossUsd = prefs.getFloat(KEY_MAX_LOSS_USD, 3.5f).toDouble(),
+            startingBalance = prefs.getFloat(KEY_STARTING_BALANCE, 10.0f).toDouble(),
+            positionSizeUsd = prefs.getFloat(KEY_POSITION_SIZE, 3.5f).toDouble(),
+            leverage = prefs.getInt(KEY_LEVERAGE, 3),
+            targetProfitUsd = prefs.getFloat(KEY_TARGET_PROFIT, 1.0f).toDouble(),
+            maxLossUsd = prefs.getFloat(KEY_MAX_LOSS_USD, 0.5f).toDouble(),
             isReverseMacdCutEnabled = prefs.getBoolean(KEY_REVERSE_MACD_CUT, false),
             isBreakEvenEnabled = prefs.getBoolean(KEY_BE_ENABLED, true),
-            beTriggerPct = prefs.getFloat(KEY_BE_TRIGGER, 1.5f).toDouble(),
+            beTriggerPct = prefs.getFloat(KEY_BE_TRIGGER, 2.0f).toDouble(),
             isTrailingEnabled = prefs.getBoolean(KEY_TRAIL_ENABLED, true),
-            trailingTriggerPct = prefs.getFloat(KEY_TRAIL_TRIGGER, 2.0f).toDouble(),
-            trailingDistancePct = prefs.getFloat(KEY_TRAIL_DIST, 1.2f).toDouble()
+            trailingTriggerPct = prefs.getFloat(KEY_TRAIL_TRIGGER, 2.5f).toDouble(),
+            trailingDistancePct = prefs.getFloat(KEY_TRAIL_DIST, 1.2f).toDouble(),
+            bybitApiKey = prefs.getString(KEY_BYBIT_API_KEY, "") ?: "",
+            bybitApiSecret = prefs.getString(KEY_BYBIT_API_SECRET, "") ?: "",
+            isLiveTradingEnabled = prefs.getBoolean(KEY_LIVE_TRADING, false)
         )
     }
 
@@ -50,6 +56,28 @@ object SettingsManager {
             .putBoolean(KEY_TRAIL_ENABLED, settings.isTrailingEnabled)
             .putFloat(KEY_TRAIL_TRIGGER, settings.trailingTriggerPct.toFloat())
             .putFloat(KEY_TRAIL_DIST, settings.trailingDistancePct.toFloat())
+            .putString(KEY_BYBIT_API_KEY, settings.bybitApiKey)
+            .putString(KEY_BYBIT_API_SECRET, settings.bybitApiSecret)
+            .putBoolean(KEY_LIVE_TRADING, settings.isLiveTradingEnabled)
             .apply()
+    }
+
+    /**
+     * Creates a calibrated $10 account setup
+     */
+    fun getTenDollarPreset(current: TradingSettings): TradingSettings {
+        return current.copy(
+            startingBalance = 10.0,
+            positionSizeUsd = 3.5,
+            leverage = 3,
+            targetProfitUsd = 1.0,
+            maxLossUsd = 0.5,
+            isReverseMacdCutEnabled = false,
+            isBreakEvenEnabled = true,
+            beTriggerPct = 2.0,
+            isTrailingEnabled = true,
+            trailingTriggerPct = 2.5,
+            trailingDistancePct = 1.2
+        )
     }
 }

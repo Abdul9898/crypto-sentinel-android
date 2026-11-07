@@ -298,6 +298,7 @@ class MainActivity : AppCompatActivity() {
         val current = s.settings
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_settings, null)
 
+        val btnApplyTenDollarPreset: MaterialButton = view.findViewById(R.id.btnApplyTenDollarPreset)
         val etStartingBalance: EditText = view.findViewById(R.id.etStartingBalance)
         val etPositionSize: EditText = view.findViewById(R.id.etPositionSize)
         val etTargetProfit: EditText = view.findViewById(R.id.etTargetProfit)
@@ -305,6 +306,13 @@ class MainActivity : AppCompatActivity() {
         val switchReverseMacdCut: SwitchMaterial = view.findViewById(R.id.switchReverseMacdCut)
         val switchBreakEven: SwitchMaterial = view.findViewById(R.id.switchBreakEven)
         val switchTrailing: SwitchMaterial = view.findViewById(R.id.switchTrailing)
+
+        val switchLiveTrading: SwitchMaterial = view.findViewById(R.id.switchLiveTrading)
+        val etBybitApiKey: EditText = view.findViewById(R.id.etBybitApiKey)
+        val etBybitApiSecret: EditText = view.findViewById(R.id.etBybitApiSecret)
+        val btnTestBybitApi: MaterialButton = view.findViewById(R.id.btnTestBybitApi)
+        val tvBybitStatus: TextView = view.findViewById(R.id.tvBybitStatus)
+
         val btnResetPaper: MaterialButton = view.findViewById(R.id.btnResetPaper)
         val btnSaveSettings: MaterialButton = view.findViewById(R.id.btnSaveSettings)
         val btnCancelSettings: MaterialButton = view.findViewById(R.id.btnCancelSettings)
@@ -316,12 +324,20 @@ class MainActivity : AppCompatActivity() {
         val btnLev20: TextView = view.findViewById(R.id.btnLev20)
 
         etStartingBalance.setText(String.format(Locale.US, "%.0f", current.startingBalance))
-        etPositionSize.setText(String.format(Locale.US, "%.0f", current.positionSizeUsd))
+        etPositionSize.setText(String.format(Locale.US, "%.1f", current.positionSizeUsd))
         etTargetProfit.setText(String.format(Locale.US, "%.1f", current.targetProfitUsd))
         etMaxLoss.setText(String.format(Locale.US, "%.1f", current.maxLossUsd))
         switchReverseMacdCut.isChecked = current.isReverseMacdCutEnabled
         switchBreakEven.isChecked = current.isBreakEvenEnabled
         switchTrailing.isChecked = current.isTrailingEnabled
+
+        switchLiveTrading.isChecked = current.isLiveTradingEnabled
+        etBybitApiKey.setText(current.bybitApiKey)
+        etBybitApiSecret.setText(current.bybitApiSecret)
+        if (current.bybitApiKey.isNotBlank()) {
+            tvBybitStatus.text = "Status: Key configured (Tap Test to verify)"
+            tvBybitStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_cyan))
+        }
 
         var selectedLev = current.leverage
 
@@ -356,13 +372,48 @@ class MainActivity : AppCompatActivity() {
         btnLev10.setOnClickListener { updateLevUi(10) }
         btnLev20.setOnClickListener { updateLevUi(20) }
 
+        // One-Tap $10 Preset Button
+        btnApplyTenDollarPreset.setOnClickListener {
+            etStartingBalance.setText("10")
+            etPositionSize.setText("3.5")
+            etTargetProfit.setText("1.0")
+            etMaxLoss.setText("0.5")
+            updateLevUi(3) // 3x leverage
+            switchReverseMacdCut.isChecked = false
+            switchBreakEven.isChecked = true
+            switchTrailing.isChecked = true
+            Toast.makeText(this, "⚡ Applied $10 Account Preset! (3x Lev, $3.50 size, +$1.00 TP, -$0.50 SL)", Toast.LENGTH_SHORT).show()
+        }
+
+        // Test Bybit Connection Button
+        btnTestBybitApi.setOnClickListener {
+            val key = etBybitApiKey.text.toString().trim()
+            val secret = etBybitApiSecret.text.toString().trim()
+            if (key.isBlank() || secret.isBlank()) {
+                tvBybitStatus.text = "❌ Error: Please enter both Bybit API Key and Secret Key"
+                tvBybitStatus.setTextColor(ContextCompat.getColor(this, R.color.neon_red))
+                return@setOnClickListener
+            }
+
+            tvBybitStatus.text = "🔄 Connecting to Bybit V5 & verifying..."
+            tvBybitStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_cyan))
+
+            BybitApiClient.testConnection(key, secret) { success, msg ->
+                tvBybitStatus.text = msg
+                tvBybitStatus.setTextColor(
+                    if (success) ContextCompat.getColor(this, R.color.neon_green)
+                    else ContextCompat.getColor(this, R.color.neon_red)
+                )
+            }
+        }
+
         val dialog = AlertDialog.Builder(this)
             .setView(view)
             .create()
 
         btnResetPaper.setOnClickListener {
             s.resetPaperStats()
-            Toast.makeText(this, "Paper Trading Balance & History Reset", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Trading Balance & History Reset", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
 
@@ -371,6 +422,15 @@ class MainActivity : AppCompatActivity() {
             val posSize = etPositionSize.text.toString().toDoubleOrNull() ?: current.positionSizeUsd
             val targetProfit = etTargetProfit.text.toString().toDoubleOrNull() ?: current.targetProfitUsd
             val maxLoss = etMaxLoss.text.toString().toDoubleOrNull() ?: current.maxLossUsd
+            val key = etBybitApiKey.text.toString().trim()
+            val secret = etBybitApiSecret.text.toString().trim()
+            val isLive = switchLiveTrading.isChecked
+
+            if (isLive && (key.isBlank() || secret.isBlank())) {
+                Toast.makeText(this, "⚠️ Live Trading requires entering your Bybit API Key & Secret Key!", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+
             val newSettings = current.copy(
                 startingBalance = startBal,
                 positionSizeUsd = posSize,
@@ -379,11 +439,16 @@ class MainActivity : AppCompatActivity() {
                 leverage = selectedLev,
                 isReverseMacdCutEnabled = switchReverseMacdCut.isChecked,
                 isBreakEvenEnabled = switchBreakEven.isChecked,
-                isTrailingEnabled = switchTrailing.isChecked
+                isTrailingEnabled = switchTrailing.isChecked,
+                bybitApiKey = key,
+                bybitApiSecret = secret,
+                isLiveTradingEnabled = isLive
             )
             s.updateSettings(newSettings)
-            Toast.makeText(this, "Trading Settings Saved! (TP: $${String.format(Locale.US, "%.2f", targetProfit)} | Max SL: $${String.format(Locale.US, "%.2f", maxLoss)})", Toast.LENGTH_SHORT).show()
+            val modeMsg = if (isLive) "🔴 LIVE BYBIT TRADING ACTIVE" else "🧪 PAPER SIMULATION ACTIVE"
+            Toast.makeText(this, "$modeMsg (TP: $${String.format(Locale.US, "%.2f", targetProfit)} | SL: $${String.format(Locale.US, "%.2f", maxLoss)})", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
+            updateUiFromService()
         }
 
         btnCancelSettings.setOnClickListener {
@@ -415,6 +480,17 @@ class MainActivity : AppCompatActivity() {
     private fun updateUiFromService() {
         try {
             val s = sentinelService ?: return
+
+            // 0. Update Live vs Paper Trading Mode Badge
+            if (s.settings.isLiveTradingEnabled) {
+                binding.tvModeBadge.text = "🔴 LIVE BYBIT"
+                binding.tvModeBadge.setTextColor(ContextCompat.getColor(this, R.color.neon_red))
+                binding.tvModeBadge.setBackgroundResource(R.drawable.bg_pro_badge_red)
+            } else {
+                binding.tvModeBadge.text = "🧪 PAPER SIM"
+                binding.tvModeBadge.setTextColor(ContextCompat.getColor(this, R.color.primary_cyan))
+                binding.tvModeBadge.setBackgroundResource(R.drawable.bg_pro_badge_cyan)
+            }
 
             // 1. Update Pre-Pump / Pre-Dump Radar List
             val filteredGainers = if (selectedRadarTab == "PRE_PUMP") {
@@ -448,10 +524,11 @@ class MainActivity : AppCompatActivity() {
             alertsList.addAll(s.alertsList)
             alertAdapter.notifyDataSetChanged()
 
-            // 5. Update Paper Trading Scorecard (Safe Formatting)
+            // 5. Update Trading Scorecard (Safe Formatting)
             val stats = s.paperStats
             val pnlSign = if (stats.pnlUsd >= 0) "+" else ""
-            binding.tvPaperPnl.text = String.format(Locale.US, "💼 PAPER PnL: %s$%,.2f (%+.1f%%)", pnlSign, stats.pnlUsd, stats.pnlPct)
+            val modeLabel = if (s.settings.isLiveTradingEnabled) "🔴 LIVE BYBIT PnL" else "💼 PAPER PnL"
+            binding.tvPaperPnl.text = String.format(Locale.US, "%s: %s$%,.2f (%+.1f%%)", modeLabel, pnlSign, stats.pnlUsd, stats.pnlPct)
             binding.tvPaperWinRate.text = String.format(Locale.US, "Win Rate: %.1f%% (%dW / %dL) | Capital: $%,.0f | Open: %d", stats.winRate, stats.wins, stats.losses, stats.balance, stats.openCount)
 
             // 6. Update QUANT ALPHA Cockpit Card
