@@ -76,6 +76,8 @@ class SentinelForegroundService : Service() {
         } else {
             "⚡ LIQ SQUEEZE: $${String.format(Locale.US, "%,.0f", shortUsd)} Shorts"
         }
+    }
+
     // Real-Time Open Interest (OI) Velocity Tracker (Rolling 15-Minute Window)
     val coinOiHistory = ConcurrentHashMap<String, MutableList<OiPoint>>()
     private val lastOiTradeTime = ConcurrentHashMap<String, Long>()
