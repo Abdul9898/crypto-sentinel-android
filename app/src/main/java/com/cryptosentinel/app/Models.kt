@@ -98,7 +98,8 @@ data class PaperPosition(
     var lowestPrice: Double = entryPrice,
     var isBreakEvenSet: Boolean = false,
     var isTrailingActive: Boolean = false,
-    var statusNote: String = "ACTIVE"
+    var statusNote: String = "ACTIVE",
+    val openTimestamp: Long = System.currentTimeMillis()
 )
 
 data class PaperStats(
@@ -170,6 +171,12 @@ data class TradingSettings(
     var trailingDistancePct: Double = 1.2
 )
 
+data class VolumeSpikeInfo(
+    val isSpike: Boolean = false,
+    val ratio: Double = 1.0,
+    val volume: Double = 0.0
+)
+
 data class ProEngineState(
     val symbol: String = "BTCUSDT",
     val currentPrice: Double = 0.0,
@@ -182,7 +189,8 @@ data class ProEngineState(
     val macd15mBias: String = "NEUTRAL",
     val macd1hBias: String = "NEUTRAL",
     val lastSignalTime: Long = 0L,
-    val lastSignalText: String = "Monitoring Multi-Timeframe Trend..."
+    val lastSignalText: String = "Monitoring Multi-Timeframe Trend...",
+    val volumeSpikesText: String = ""
 )
 
 
