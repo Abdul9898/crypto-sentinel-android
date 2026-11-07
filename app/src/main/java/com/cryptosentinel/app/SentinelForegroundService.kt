@@ -495,6 +495,7 @@ class SentinelForegroundService : Service() {
                                                 if (macd != null) {
                                                     val map = coinMacdStatus.getOrPut(sym) { ConcurrentHashMap() }
                                                     map[interval] = macd
+                                                }
 
                                                 // 3. PURE VOLUME SPIKE TRADE ENTRY (Any timeframe: 1m, 5m, 15m, 1h)
                                                 if (volSpike.isSpike) {
