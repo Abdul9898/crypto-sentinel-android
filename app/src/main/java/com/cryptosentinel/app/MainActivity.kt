@@ -446,7 +446,8 @@ class MainActivity : AppCompatActivity() {
                 " | 24h: $lStr-$hStr"
             } else ""
             val spikeStr = if (pro.volumeSpikesText.isNotEmpty()) " | ${pro.volumeSpikesText}" else " | ${pro.lastSignalText}"
-            binding.tvProVelocity.text = String.format(Locale.US, "1h Vel: %s%.2f%% | Vol: %s%s%s", vSign, pro.velocity1hPct, volStr, rangeStr, spikeStr)
+            val liqStr = if (pro.liquidationText.isNotEmpty()) " | ${pro.liquidationText}" else ""
+            binding.tvProVelocity.text = String.format(Locale.US, "1h Vel: %s%.2f%% | Vol: %s%s%s%s", vSign, pro.velocity1hPct, volStr, rangeStr, spikeStr, liqStr)
 
             updateProBadge(binding.tvProBadge1m, "1M", pro.macd1mBias, pro.vol1mSpike)
             updateProBadge(binding.tvProBadge5m, "5M", pro.macd5mBias, pro.vol5mSpike)

@@ -61,24 +61,25 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.2.2' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.2.2' }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.3.0' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('Crypto Sentinel Android {0}', github.ref_name) || 'Crypto Sentinel Android v1.3.0' }}
           body: |
-            ## ⚡ Crypto Sentinel Android v1.2.2 (Pure 4-Timeframe Volume Surge Trading)
+            ## ⚡ Crypto Sentinel Android v1.3.0 (Live Liquidation Flush Hunter & Snapback Sniper)
             
-            ### 🚀 What's New in v1.2.2:
-            - 🌊 **Pure Volume Surge Entry (Any Timeframe: 1m, 5m, 15m, 1h)**: The bot now triggers trades directly on volume spikes across all 4 timeframes! When a surge occurs, the bot enters immediately following the candle direction (Green = LONG, Red = SHORT) to capture rapid momentum pushes.
-            - 🎯 **Pure Quick TP ($2.00) & Hard SL ($3.50)**: All indicator-based reversal cuts have been eliminated. Positions have full breathing room to run directly to our quick +$2.00 profit target or exit at the strict -$3.50 hard stop-loss cap (with +1.5% auto break-even lock).
-            - ⚡ **Enhanced Multi-Candle Volume Surge Engine**: Detects both developing live surges ($\ge 1.8\times$) and completed candle spikes ($\ge 2.0\times$) against 10-candle moving average volume.
-            - 📊 **4-Timeframe Live Volume Heat-Map Badges (1M, 5M, 15M, 1H)**: Added real-time badges displaying live volume multiplier and candle bias across all 4 timeframes on the focal cockpit card. Active spikes light up in vibrant cyan (`🔥 1M: 3.2x`).
-            - 🛡️ **Sub-Cent Micro-Token Filter (< $0.05)** & **24/7 Background Persistence** maintained.
+            ### 🚀 What's New in v1.3.0:
+            - ⚡ **Real-Time Bybit V5 Liquidation Stream (`allLiquidation.<symbol>`)**: Connected directly to Bybit's high-frequency liquidation order stream over WebSocket. Tracks rolling 45-second institutional and retail liquidations in real time.
+            - 🌊 **Long Flush Snapback Sniper**: Detects massive cascade dumping where leveraged retail longs are liquidated ($\ge \$80\text{K}$ on BTC/ETH, $\ge \$25\text{K}$ on mid-caps, $\ge \$15\text{K}$ on altcoin gainers). When forced selling exhausts, the bot snipes **LONG** to capture the sharp V-reversal bounce.
+            - 🎯 **Short Squeeze Exhaustion Sniper**: Detects violent squeeze spikes where trapped shorts are forced-liquidated. When artificial buy pressure dries up at the top wick, the bot snipes **SHORT** to ride the instant exhaustion drop.
+            - 📊 **Live Liquidation Status in Cockpit Card**: Real-time display on the focal card showing rolling liquidation volume and side (`⚡ LIQ FLUSH: $45,200 Longs` / `⚡ LIQ SQUEEZE: $38,000 Shorts`).
+            - 🛡️ **Full Risk Architecture**: Strict 3-minute cooldown per symbol, instant +$2.00 TP, -$3.50 hard SL, sub-cent (< $0.05) token filter, and max 3 simultaneous open positions.
+            - 🌊 **Multi-Timeframe Volume Surge Engine (1m, 5m, 15m, 1h)**: Fully preserved and working alongside the Liquidation Flush Hunter!
             
             ### 🛠️ Stable Signing:
-            - 🔑 **Dual Signature Schemes (v1 + v2)**: Permanent signed release with `sentinel.keystore`. Installs seamlessly over previous versions.
+            - 🔑 **Permanent Dual Signature Scheme (v1 + v2)**: Signed with permanent `sentinel.keystore`. Direct update over previous installations without uninstalling.
             
             ### 📥 Download
             Download `CryptoSentinel.apk` below and install directly on your phone:
-            `https://github.com/Abdul9898/crypto-sentinel-android/releases/download/v1.2.2/CryptoSentinel.apk`
+            https://github.com/Abdul9898/crypto-sentinel-android/releases/download/v1.3.0/CryptoSentinel.apk
           files: output/CryptoSentinel.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

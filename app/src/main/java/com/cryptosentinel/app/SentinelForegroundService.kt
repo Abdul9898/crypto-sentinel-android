@@ -9,6 +9,8 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.google.gson.Gson
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import kotlinx.coroutines.*
 import okhttp3.*
@@ -50,6 +52,31 @@ class SentinelForegroundService : Service() {
     val coinMacdStatus = ConcurrentHashMap<String, ConcurrentHashMap<String, MacdStatus>>()
     private val lastMacdTradeTime = ConcurrentHashMap<String, Long>()
     private val lastVolumeTradeTime = ConcurrentHashMap<String, Long>()
+
+    // Real-Time Liquidation Flush Tracker (Rolling 45-Second Window)
+    val coinLiquidations = ConcurrentHashMap<String, MutableList<LiquidationEvent>>()
+    private val lastLiqTradeTime = ConcurrentHashMap<String, Long>()
+
+    fun getRecentLiquidationSummary(sym: String): String {
+        val events = coinLiquidations[sym] ?: return ""
+        val now = System.currentTimeMillis()
+        var longUsd = 0.0
+        var shortUsd = 0.0
+        synchronized(events) {
+            events.removeAll { now - it.timestamp > 45_000L }
+            for (ev in events) {
+                if (ev.side.equals("Buy", ignoreCase = true)) longUsd += ev.usdValue
+                else if (ev.side.equals("Sell", ignoreCase = true)) shortUsd += ev.usdValue
+            }
+        }
+        val total = longUsd + shortUsd
+        if (total < 5000.0) return ""
+        return if (longUsd >= shortUsd) {
+            "⚡ LIQ FLUSH: $${String.format(Locale.US, "%,.0f", longUsd)} Longs"
+        } else {
+            "⚡ LIQ SQUEEZE: $${String.format(Locale.US, "%,.0f", shortUsd)} Shorts"
+        }
+    }
 
     // Global 24h Ticker Metrics Cache (for BTC & ALL symbols)
     val allCoinMetrics = ConcurrentHashMap<String, GainerItem>()
@@ -249,10 +276,11 @@ class SentinelForegroundService : Service() {
                 for (s in trackedCoins.keys) {
                     topics.add("publicTrade.$s")
                     topics.add("tickers.$s")
+                    topics.add("allLiquidation.$s")
                 }
                 val subMsg = mapOf("op" to "subscribe", "args" to topics)
                 ws.send(gson.toJson(subMsg))
-                updateServiceNotification("Monitoring active order flow & alts")
+                updateServiceNotification("Monitoring order flow & liquidations")
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
@@ -357,7 +385,7 @@ class SentinelForegroundService : Service() {
                 val fullSym = if (g.symbol.endsWith("USDT")) g.symbol else "${g.symbol}USDT"
                 if (!trackedCoins.containsKey(fullSym)) {
                     trackedCoins[fullSym] = CoinState(symbol = fullSym, price = g.price)
-                    val subMsg = mapOf("op" to "subscribe", "args" to listOf("publicTrade.$fullSym", "tickers.$fullSym"))
+                    val subMsg = mapOf("op" to "subscribe", "args" to listOf("publicTrade.$fullSym", "tickers.$fullSym", "allLiquidation.$fullSym"))
                     webSocket?.send(gson.toJson(subMsg))
                 }
             }
@@ -371,6 +399,11 @@ class SentinelForegroundService : Service() {
     fun selectFocalSymbol(sym: String) {
         val fullSym = if (sym.endsWith("USDT")) sym else "${sym}USDT"
         focalSymbol = fullSym
+        if (!trackedCoins.containsKey(fullSym)) {
+            trackedCoins[fullSym] = CoinState(symbol = fullSym)
+            val subMsg = mapOf("op" to "subscribe", "args" to listOf("publicTrade.$fullSym", "tickers.$fullSym", "allLiquidation.$fullSym"))
+            webSocket?.send(gson.toJson(subMsg))
+        }
         updateProEngineState()
         scheduleUiUpdate(force = true)
     }
@@ -405,6 +438,7 @@ class SentinelForegroundService : Service() {
         val v60 = spikes?.get("60")?.ratio ?: 1.0
 
         val volSpikes = getVolumeSpikeSummary(fullSym)
+        val liqText = getRecentLiquidationSummary(fullSym)
 
         proEngineState = ProEngineState(
             symbol = cleanSym,
@@ -424,7 +458,8 @@ class SentinelForegroundService : Service() {
             vol1hSpike = v60,
             lastSignalTime = proEngineState.lastSignalTime,
             lastSignalText = proEngineState.lastSignalText,
-            volumeSpikesText = volSpikes
+            volumeSpikesText = volSpikes,
+            liquidationText = liqText
         )
     }
 
@@ -743,8 +778,164 @@ class SentinelForegroundService : Service() {
                     checkOpenPositions(sym, p)
                 }
                 scheduleUiUpdate()
+            } else if (topic.startsWith("allLiquidation.")) {
+                val sym = topic.substringAfter("allLiquidation.")
+                handleLiquidationEvent(sym, data)
             }
         } catch (_: Exception) {}
+    }
+
+    private fun handleLiquidationEvent(sym: String, data: JsonElement) {
+        val items = mutableListOf<JsonObject>()
+        if (data.isJsonArray) {
+            val arr = data.asJsonArray
+            for (el in arr) {
+                if (el.isJsonObject) items.add(el.asJsonObject)
+            }
+        } else if (data.isJsonObject) {
+            items.add(data.asJsonObject)
+        }
+
+        val now = System.currentTimeMillis()
+        var added = false
+        val list = coinLiquidations.computeIfAbsent(sym) { Collections.synchronizedList(mutableListOf()) }
+
+        for (obj in items) {
+            val side = obj.get("S")?.asString ?: obj.get("side")?.asString ?: ""
+            val v = obj.get("v")?.asString?.toDoubleOrNull() ?: obj.get("size")?.asString?.toDoubleOrNull() ?: 0.0
+            val p = obj.get("p")?.asString?.toDoubleOrNull() ?: obj.get("price")?.asString?.toDoubleOrNull() ?: 0.0
+            if (v <= 0.0 || p <= 0.0) continue
+            val usdVal = v * p
+            val ev = LiquidationEvent(
+                timestamp = now,
+                symbol = sym,
+                side = side,
+                size = v,
+                price = p,
+                usdValue = usdVal
+            )
+            synchronized(list) {
+                list.add(ev)
+            }
+            added = true
+        }
+
+        if (added) {
+            var longUsd = 0.0
+            var shortUsd = 0.0
+            synchronized(list) {
+                list.removeAll { now - it.timestamp > 45_000L }
+                for (ev in list) {
+                    if (ev.side.equals("Buy", ignoreCase = true)) longUsd += ev.usdValue
+                    else if (ev.side.equals("Sell", ignoreCase = true)) shortUsd += ev.usdValue
+                }
+            }
+            val curPrice = trackedCoins[sym]?.price ?: 0.0
+            evaluateLiquidationFlush(sym, longUsd, shortUsd, curPrice)
+            if (focalSymbol == sym) {
+                updateProEngineState()
+                scheduleUiUpdate()
+            }
+        }
+    }
+
+    private fun evaluateLiquidationFlush(
+        sym: String,
+        longUsd: Double,
+        shortUsd: Double,
+        lastPrice: Double
+    ) {
+        val cleanSym = sym.replace("1000", "").replace("USDT", "")
+        if (cleanSym in NON_CRYPTO_SYMBOLS || sym.contains("STOCK")) return
+
+        val currentPrice = trackedCoins[sym]?.price.takeIf { it != null && it > 0 } ?: lastPrice
+        if (currentPrice < 0.05) return
+
+        val isMajor = cleanSym in listOf("BTC", "ETH")
+        val isMidTier = cleanSym in listOf("SOL", "DOGE", "XRP", "SUI", "NEAR", "PEPE")
+
+        val threshold = when {
+            isMajor -> 80_000.0
+            isMidTier -> 25_000.0
+            else -> 15_000.0
+        }
+
+        val isLongFlush = longUsd >= threshold && longUsd > (shortUsd * 2.0)
+        val isShortSqueeze = shortUsd >= threshold && shortUsd > (longUsd * 2.0)
+
+        if (!isLongFlush && !isShortSqueeze) return
+
+        val now = System.currentTimeMillis()
+        val lastTrigger = lastLiqTradeTime[sym] ?: 0L
+        if (now - lastTrigger < 3 * 60 * 1000L) return // 3-minute cooldown
+
+        // Counter-trade the liquidation cascade:
+        // Long flush (massive long liquidations / forced sell dump) -> enter LONG on the snapback bounce
+        // Short squeeze (massive short liquidations / forced buy squeeze) -> enter SHORT on exhaustion pullback
+        val isLong = isLongFlush
+        val side = if (isLong) "LONG" else "SHORT"
+        val liqAmount = if (isLongFlush) longUsd else shortUsd
+        val liqKStr = String.format(Locale.US, "%,.0f", liqAmount)
+        val flushType = if (isLongFlush) "Long Flush" else "Short Squeeze"
+
+        val totalOpen = synchronized(paperStats.openPositions) { paperStats.openPositions.size }
+        val hasOpenForSym = synchronized(paperStats.openPositions) {
+            paperStats.openPositions.any { it.symbol == sym }
+        }
+
+        if (totalOpen < 3 && !hasOpenForSym) {
+            lastLiqTradeTime[sym] = now
+
+            val tierConfig = TierCalculator.getConfig(sym)
+            val targetProfit = if (settings.targetProfitUsd > 0.0) settings.targetProfitUsd else 2.0
+            val maxLoss = if (settings.maxLossUsd > 0.0) settings.maxLossUsd else 3.5
+            val notional = settings.positionSizeUsd * settings.leverage
+            val quickTpPct = if (notional > 0.0) (targetProfit / notional) * 100.0 else tierConfig.tpPct
+            val quickSlPct = if (notional > 0.0) (maxLoss / notional) * 100.0 else tierConfig.slPct
+            val tp = if (isLong) currentPrice * (1.0 + quickTpPct / 100.0) else currentPrice * (1.0 - quickTpPct / 100.0)
+            val sl = if (isLong) currentPrice * (1.0 - quickSlPct / 100.0) else currentPrice * (1.0 + quickSlPct / 100.0)
+
+            val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(now))
+            val pStr = if (currentPrice < 1.0) String.format(Locale.US, "$%.4f", currentPrice) else String.format(Locale.US, "$%.2f", currentPrice)
+
+            val pos = PaperPosition(
+                symbol = sym,
+                side = side,
+                entryPrice = currentPrice,
+                sizeUsd = settings.positionSizeUsd,
+                leverage = settings.leverage,
+                tpPrice = tp,
+                slPrice = sl,
+                tpPct = quickTpPct,
+                slPct = quickSlPct,
+                openTimeStr = timeStr,
+                triggerReason = "⚡ Liq Hunter ($${liqKStr} $flushType)",
+                openTimestamp = now
+            )
+            synchronized(paperStats.openPositions) {
+                paperStats.openPositions.add(pos)
+            }
+            StateManager.saveState(this, paperStats, tradeStories)
+
+            proEngineState = proEngineState.copy(
+                lastSignalTime = now,
+                lastSignalText = "⚡ $side Liq Hunter ($flushType $$liqKStr): $cleanSym @ $pStr"
+            )
+
+            val alert = AlertItem(
+                timeStr = timeStr,
+                symbol = cleanSym,
+                type = "LIQ_FLUSH_HUNTER",
+                conviction = "HIGH",
+                message = "⚡ LIQ HUNTER $side: $cleanSym @ $pStr | $$liqKStr $flushType"
+            )
+            addAlert(alert)
+            sendAlertNotification(
+                "⚡ Liq Hunter: $side $cleanSym",
+                "Entered $side after $$liqKStr $flushType @ $pStr (${settings.leverage}x)"
+            )
+            scheduleUiUpdate(force = true)
+        }
     }
 
     private fun checkOpenPositions(sym: String, currentPrice: Double) {

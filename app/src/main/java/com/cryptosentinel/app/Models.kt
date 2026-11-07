@@ -177,6 +177,15 @@ data class VolumeSpikeInfo(
     val volume: Double = 0.0
 )
 
+data class LiquidationEvent(
+    val timestamp: Long,
+    val symbol: String,
+    val side: String, // "Sell" = Long Liquidated (forced dump), "Buy" = Short Liquidated (forced pump)
+    val size: Double,
+    val price: Double,
+    val usdValue: Double
+)
+
 data class ProEngineState(
     val symbol: String = "BTCUSDT",
     val currentPrice: Double = 0.0,
@@ -195,7 +204,8 @@ data class ProEngineState(
     val vol1hSpike: Double = 1.0,
     val lastSignalTime: Long = 0L,
     val lastSignalText: String = "Monitoring 4-Timeframe Volume Spikes...",
-    val volumeSpikesText: String = ""
+    val volumeSpikesText: String = "",
+    val liquidationText: String = ""
 )
 
 
